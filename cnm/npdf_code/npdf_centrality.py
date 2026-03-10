@@ -60,7 +60,8 @@ def K0_KM_avg_over_bin(gluon,
                        *,
                        nb: int = 5,
                        y_shift: float = 0.0,
-                       SA_all: Optional[np.ndarray] = None
+                       SA_all: Optional[np.ndarray] = None,
+                       kind: str = "pA"
                        ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Average K(b; y,pT) = S_AWS(b; y,pT) / S_A(y,pT) over the centrality
@@ -101,17 +102,23 @@ def K0_KM_avg_over_bin(gluon,
     SA_safe = np.clip(SA_all_loc, 1e-12, None)
 
     # Normalisation for WS profile
-    Nnorm = float(gluon.Nnorm())
+    if kind == "AA":
+        Nnorm = float(glauber.Nnorm_AA())
+    else:
+        Nnorm = float(gluon.Nnorm())
 
     # b-grid in percentile space
     ps    = np.linspace(c0 / 100.0, c1 / 100.0, nb)
-    bgrid = np.array([glauber.b_from_percentile(p, kind="pA") for p in ps])
+    bgrid = np.array([glauber.b_from_percentile(p, kind=kind) for p in ps])
 
     K0_acc = []
     KM_acc = []
 
     for b_val in bgrid:
-        alpha_b = float(gluon.alpha_of_b(b_val))
+        if kind == "AA":
+            alpha_b = float(glauber.alpha_AA_of_b(b_val))
+        else:
+            alpha_b = float(gluon.alpha_of_b(b_val))
         # S_AWS(b; y,pT) for all sets
         SAWS_all = 1.0 + Nnorm * (SA_all_loc - 1.0) * alpha_b   # (49,N)
         # K_all(b; y,pT)
@@ -198,7 +205,8 @@ def compute_df49_by_centrality(base_df: pd.DataFrame,
                                y_shift_fraction: float = 0.0,
                                y_shift: Optional[float] = None,
                                SA_all: Optional[np.ndarray] = None,
-                                absorption: Optional[NuclearAbsorption] = None
+                               absorption: Optional[NuclearAbsorption] = None,
+                               kind: str = "pA"
                                ) -> Tuple[Dict[str, pd.DataFrame],
                                           Dict[str, Tuple[np.ndarray, np.ndarray]],
                                           np.ndarray,
@@ -262,6 +270,7 @@ def compute_df49_by_centrality(base_df: pd.DataFrame,
             nb=nb_bsamples,
             y_shift=y_shift_used,
             SA_all=SA_all,
+            kind=kind
         )
         K_by_cent[tag]    = (K0, KM)
         df49_by_cent[tag] = fuse_sigma_and_K(base_df, r0, M, K0, KM)
@@ -361,13 +370,13 @@ def get_weights(sub: pd.DataFrame,
 
     # σ_pA(y, pt) at each local point
     elif mode == "pa@local":
-        lut = {(float(r.y), float(r.pt)): float(r.val) for r in df_pa.itertuples()}
+        lut = {(float(r.y), float(r.pt)): float(getattr(r, "val", 1.0)) for r in df_pa.itertuples()}
         w = np.array([lut.get((float(r.y), float(r.pt)), 0.0)
                       for r in sub.itertuples()], float)
 
     # σ_pp(y, pt) at each local point
     elif mode == "pp@local":
-        lut = {(float(r.y), float(r.pt)): float(r.val) for r in df_pp.itertuples()}
+        lut = {(float(r.y), float(r.pt)): float(getattr(r, "val", 1.0)) for r in df_pp.itertuples()}
         w = np.array([lut.get((float(r.y), float(r.pt)), 0.0)
                       for r in sub.itertuples()], float)
 

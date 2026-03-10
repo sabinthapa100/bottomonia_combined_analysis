@@ -62,12 +62,12 @@ from particle import Particle  # type: ignore
 from coupling import alpha_s_provider  # type: ignore
 import quenching_fast as QF  # type: ignore
 # Use the FAST vectorized test module as requested
-import eloss_cronin_centrality_test as EC  # type: ignore
+import eloss_cronin_centrality as EC  # type: ignore
 
 # ------------------------------------------------------------
 # nPDF input locations
 # ------------------------------------------------------------
-NPDF_INPUT_DIR = ROOT / "input" / "npdf"
+NPDF_INPUT_DIR = ROOT.parent / "inputs" / "npdf"
 P5_DIR = NPDF_INPUT_DIR / "pPb5TeV"
 P8_DIR = NPDF_INPUT_DIR / "pPb8TeV"
 DAU_DIR = NPDF_INPUT_DIR / "dAu200GeV"

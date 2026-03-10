@@ -380,6 +380,27 @@ class OpticalGlauber:
 
     # --------- overlap integrals ---------
 
+    def TAA_of_b(self, b_fm: float) -> float:
+        return float(_interp1(self.b_grid, self.TAA_b, b_fm))
+
+    def TpA_of_b(self, b_fm: float) -> float:
+        return float(_interp1(self.b_grid, self.TpA_b, b_fm))
+
+    def TdA_of_b(self, b_fm: float) -> float:
+        return float(_interp1(self.b_grid, self.TdA_b, b_fm))
+
+    def alpha_AA_of_b(self, b_fm: float) -> float:
+        T0 = self.TAA_b[0]
+        return float(self.TAA_of_b(b_fm) / T0) if T0 > 0 else 0.0
+
+    def Nnorm_AA(self) -> float:
+        b = self.b_grid
+        T = self.TAA_b
+        T0 = T[0]
+        num = np.trapz(2.0*math.pi*b*T, b)
+        den = np.trapz(2.0*math.pi*b*T**2, b)
+        return float(num * T0 / max(den, 1e-30))
+
     def _TAA_of_b(self, b_fm: float) -> float:
         bx = b_fm/2.0
         def f(X: np.ndarray, Y: np.ndarray) -> np.ndarray:
@@ -449,6 +470,18 @@ class OpticalGlauber:
             return 0.0
         b = np.linspace(bmin, bmax, n_sub)
         T = np.interp(b, self.b_grid, self.TdA_b)
+        lam = self.sigma_nn_fm2 * np.maximum(T, 0.0)
+        pinel = 1.0 - np.exp(-lam)
+        Kcond = np.where(pinel > 0, lam/pinel, 0.0)
+        w = 2.0*math.pi*b*pinel
+        return float(np.trapz(Kcond*w, b) / max(np.trapz(w, b), 1e-30))
+
+    def ncoll_mean_bin_AA_optical(self, c0: float, c1: float, n_sub: int = 1200) -> float:
+        bmin, bmax = self._bin_edges_b(c0, c1, "AA")
+        if bmax <= bmin:
+            return 0.0
+        b = np.linspace(bmin, bmax, n_sub)
+        T = np.interp(b, self.b_grid, self.TAA_b)
         lam = self.sigma_nn_fm2 * np.maximum(T, 0.0)
         pinel = 1.0 - np.exp(-lam)
         Kcond = np.where(pinel > 0, lam/pinel, 0.0)

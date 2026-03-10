@@ -204,134 +204,57 @@ def ncoll_by_cent_bins(ctx, optical=True):
     ncoll_mb = fn(0.0, 1.0)
     return np.asarray(ncoll, float), float(ncoll_mb)
 
-def df_vs_y(y_cent, bands, tags):
-    rows=[]
+# ── CSV savers (Consolidated HEPData Style) ─────────────────────────
+def save_consolidated_y_csv(filepath, yc, bands_y, tags):
+    ye = edges_from_centers(yc)
+    rows = []
     for tag in tags:
-        Rc,Rlo,Rhi = bands[tag]
-        for y, rc, lo, hi in zip(y_cent, Rc, Rlo, Rhi):
-            rows.append(dict(y_center=float(y), centrality=tag, is_MB=(tag=="MB"),
-                             R_central=float(rc), R_lo=float(lo), R_hi=float(hi)))
-    return pd.DataFrame(rows)
+        Rc, Rlo, Rhi = bands_y[tag]
+        for i in range(len(yc)):
+            rows.append({
+                "Variable": "Rapidity (y)",
+                "Bin_Low": float(ye[i]), "Bin_High": float(ye[i+1]),
+                "Centrality": tag,
+                "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i])
+            })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
 
-def df_vs_pT(pT_cent, bands, tags):
-    rows=[]
-    for tag in tags:
-        Rc,Rlo,Rhi = bands[tag]
-        for p, rc, lo, hi in zip(pT_cent, Rc, Rlo, Rhi):
-            rows.append(dict(pT_center=float(p), centrality=tag, is_MB=(tag=="MB"),
-                             R_central=float(rc), R_lo=float(lo), R_hi=float(hi)))
-    return pd.DataFrame(rows)
+def save_consolidated_pT_csv(filepath, pc, all_bands_pT, tags):
+    pe = edges_from_centers(pc)
+    rows = []
+    for yname, bands_pt in all_bands_pT.items():
+        for tag in tags:
+            Rc, Rlo, Rhi = bands_pt[tag]
+            for i in range(len(pc)):
+                rows.append({
+                    "Rapidity_Window": yname,
+                    "pT_Low": float(pe[i]), "pT_High": float(pe[i+1]),
+                    "Centrality": tag,
+                    "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i])
+                })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
 
-def df_vs_cent(ctx, labels, Rc, Rlo, Rhi, mb, ncoll=None, ncoll_mb=None):
-    rows=[]
-    for i, ((cL,cR), lab) in enumerate(zip(ctx["cent_bins"], labels)):
-        rows.append(dict(
-            cent_left=float(cL), cent_right=float(cR), cent_label=lab, is_MB=False,
-            Ncoll=float(ncoll[i]) if ncoll is not None else np.nan,
-            R_central=float(Rc[i]), R_lo=float(Rlo[i]), R_hi=float(Rhi[i])
-        ))
-    rows.append(dict(
-        cent_left=float(ctx["cent_bins"][0][0]), cent_right=float(ctx["cent_bins"][-1][1]),
-        cent_label="MB", is_MB=True,
-        Ncoll=float(ncoll_mb) if ncoll_mb is not None else np.nan,
-        R_central=float(mb[0]), R_lo=float(mb[1]), R_hi=float(mb[2])
-    ))
-    return pd.DataFrame(rows)
+def save_consolidated_cent_csv(filepath, ctx, cent_data_all, Ncoll_cent, Ncoll_MB):
+    rows = []
+    for yname, (labels, Rc, Rlo, Rhi, mb) in cent_data_all.items():
+        for i, ((cL,cR), lab) in enumerate(zip(ctx["cent_bins"], labels)):
+            rows.append({
+                "Rapidity_Window": yname,
+                "Cent_Low": float(cL), "Cent_High": float(cR),
+                "Ncoll": float(Ncoll_cent[i]),
+                "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i]),
+                "is_MB": False
+            })
+        rows.append({
+            "Rapidity_Window": yname,
+            "Cent_Low": 0.0, "Cent_High": 100.0,
+            "Ncoll": float(Ncoll_MB),
+            "RAA_Central": float(mb[0]), "RAA_Err_Lo": float(mb[1]), "RAA_Err_Hi": float(mb[2]),
+            "is_MB": True
+        })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
 
-
-
-
-
-def npdf_vs_centrality(ctx, y_window, pt_range_avg, mb_c0=MB_C0):
-    y0, y1 = y_window
-    wcent = make_centrality_weight_dict(ctx["cent_bins"], c0=mb_c0)
-    width_weights = np.array([wcent[f"{int(a)}-{int(b)}%"] for (a,b) in ctx["cent_bins"]], float)
-
-    out = bin_rpa_vs_centrality(
-        ctx["df49_by_cent"], ctx["df_pp"], ctx["df_pa"], ctx["gluon"],
-        cent_bins=ctx["cent_bins"],
-        y_window=(y0, y1),
-        pt_range_avg=pt_range_avg,
-        weight_mode=WEIGHT_MODE,
-        y_ref=Y_REF,
-        pt_floor_w=PT_FLOOR_W,
-        width_weights=width_weights,
-    )
-
-    labels = [f"{int(a)}-{int(b)}%" for (a,b) in ctx["cent_bins"]]
-    Rc  = np.asarray(out["r_central"], float)
-    Rlo = np.asarray(out["r_lo"], float)
-    Rhi = np.asarray(out["r_hi"], float)
-    mb  = (float(out["mb_r_central"]), float(out["mb_r_lo"]), float(out["mb_r_hi"]))
-    return labels, Rc, Rlo, Rhi, mb
-
-# Ncoll mapping (optical default)
-Ncoll_cent, Ncoll_MB = ncoll_by_cent_bins(ctx, optical=True)
-print("[Ncoll] bins:", np.round(Ncoll_cent, 3), "MB:", round(Ncoll_MB, 3))
-
-npdf_cent_all = {}
-
-# --- Step plot vs centrality ---
-fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.5), dpi=DPI, sharey=False)
-axes = np.atleast_1d(axes).ravel()
-
-for ax, (y0, y1, name) in zip(axes, Y_WINDOWS):
-    labels, Rc, Rlo, Rhi, mb = npdf_vs_centrality(ctx, (y0,y1), PT_RANGE_AVG)
-    npdf_cent_all[name] = (labels, Rc, Rlo, Rhi, mb)
-
-    if SAVE_CSV:
-        safe_name = name.replace(" ", "").replace("<","").replace(">","")
-        dfc = df_vs_cent(ctx, labels, Rc, Rlo, Rhi, mb, ncoll=Ncoll_cent, ncoll_mb=Ncoll_MB)
-        dfc.to_csv(OUTDIR / f"RpA_nPDF_vs_centrality_{safe_name}_{ENERGY.replace('.','p')}TeV.csv", index=False)
-
-    x_edges, y_c  = cent_step_arrays(ctx["cent_bins"], Rc)
-    _,       y_lo = cent_step_arrays(ctx["cent_bins"], Rlo)
-    _,       y_hi = cent_step_arrays(ctx["cent_bins"], Rhi)
-
-    ax.step(x_edges, y_c, where="post", lw=2.0, color="tab:blue", label="nPDF" if ax is axes[0] else None)
-    ax.fill_between(x_edges, y_lo, y_hi, step="post", color="tab:blue", alpha=ALPHA_BAND, linewidth=0.0)
-    
-    # MB dashed band (same color as nPDF)
-    mb_c, mb_lo, mb_hi = mb
-    ax.fill_between(
-        [0.0, 100.0],
-        [mb_lo, mb_lo],
-        [mb_hi, mb_hi],
-        color="tab:blue",
-        alpha=0.12,
-        hatch="//",
-        linewidth=0.0,
-    )
-    ax.hlines(
-        mb_c, 0.0, 100.0,
-        colors="tab:blue",
-        linestyles="--",
-        linewidth=1.8,
-    )
-
-    ax.text(0.92, 0.94, name, transform=ax.transAxes, ha="right", va="top", fontsize=11)
-    if ax is axes[0]:
-        ax.text(0.03, 0.05, rf"$\sqrt{{s_{{NN}}}}={ctx['sqrt_sNN']/1000:.2f}$ TeV", transform=ax.transAxes,
-                ha="left", va="bottom", fontsize=12)
-
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.xaxis.set_minor_locator(ticker.NullLocator())
-    ax.tick_params(which="both", direction="in", top=True, right=True)
-    ax.axhline(1.0, color="k", ls="-", lw=1.0)
-
-    ax.set_xlabel("Centrality [%]")
-    ax.set_ylabel(r"$R^{\Upsilon}_{pA} (nPDF)$")
-    ax.set_xlim(0, 100)
-    ax.set_ylim(0.35, 1.25)
-    ax.set_title("")
-
-axes[0].legend(loc="lower right", frameon=False)
-fig.tight_layout()
-if SAVE_PDF:
-    fig.savefig(OUTDIR / f"RpA_nPDF_vs_centrality_{ENERGY.replace('.','p')}TeV.pdf", bbox_inches="tight")
-plt.close()
-
+# ── Calculation Helpers ─────────────────────────────────────────────
 def edges_from_centers(xc):
     xc = np.asarray(xc, float)
     if xc.size < 2:
@@ -342,267 +265,163 @@ def edges_from_centers(xc):
     right = xc[-1] + (xc[-1] - mids[-1])
     return np.concatenate([[left], mids, [right]])
 
-# --- Step+band vs <Ncoll> ---
-fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.5), dpi=DPI, sharey=False)
-axes = np.atleast_1d(axes).ravel()
-
-xN_edges = edges_from_centers(Ncoll_cent)
-
-for ax, (y0, y1, name) in zip(axes, Y_WINDOWS):
-    labels, Rc, Rlo, Rhi, mb = npdf_cent_all[name]
-    mb_c, mb_lo, mb_hi = mb
-
-    # main band as step vs Ncoll
-    y_c  = np.concatenate([Rc,  Rc[-1:]])
-    y_lo = np.concatenate([Rlo, Rlo[-1:]])
-    y_hi = np.concatenate([Rhi, Rhi[-1:]])
-
-    ax.step(xN_edges, y_c, where="post", lw=2.0, color="tab:blue", label="nPDF" if ax is axes[0] else None)
-    ax.fill_between(xN_edges, y_lo, y_hi, step="post", color="tab:blue", alpha=ALPHA_BAND, linewidth=0.0)
-
-    # MB dashed band (same color)
-    ax.fill_between(
-        [xN_edges[0], xN_edges[-1]],
-        [mb_lo, mb_lo],
-        [mb_hi, mb_hi],
-        color="tab:blue",
-        alpha=0.12,
-        hatch="//",
-        linewidth=0.0,
-    )
-    ax.hlines(
-        mb_c, xN_edges[0], xN_edges[-1],
-        colors="tab:blue",
-        linestyles="--",
-        linewidth=1.8,
-    )
-
-    ax.text(0.92, 0.94, name, transform=ax.transAxes, ha="right", va="top", fontsize=11)
-    if ax is axes[0]:
-        ax.text(0.03, 0.05, rf"$\sqrt{{s_{{NN}}}}={ctx['sqrt_sNN']/1000:.2f}$ TeV",
-                transform=ax.transAxes, ha="left", va="bottom", fontsize=12)
-
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.tick_params(which="both", direction="in", top=True, right=True)
-    ax.axhline(1.0, color="k", ls="-", lw=1.0)
-
-    ax.set_xlabel(r"$\langle N_{\rm coll}\rangle$")
-    ax.set_ylabel(r"$R^{\Upsilon}_{pA} (nPDF)$")
-    ax.set_ylim(0.35, 1.25)
-    ax.set_title("")
-
-axes[0].legend(loc="lower right", frameon=False)
-fig.tight_layout()
-if SAVE_PDF:
-    fig.savefig(OUTDIR / f"RpA_nPDF_vs_Ncoll_{ENERGY.replace('.','p')}TeV.pdf", bbox_inches="tight")
-plt.close()
-
 def npdf_vs_y(ctx, y_edges, pt_range_avg, include_mb=True, mb_c0=MB_C0):
     wcent = make_centrality_weight_dict(ctx["cent_bins"], c0=mb_c0) if include_mb else None
-
     out = bin_rpa_vs_y(
         ctx["df49_by_cent"], ctx["df_pp"], ctx["df_pa"], ctx["gluon"],
-        cent_bins=ctx["cent_bins"],
-        y_edges=y_edges,
-        pt_range_avg=pt_range_avg,
-        weight_mode=WEIGHT_MODE,
-        y_ref=Y_REF,
-        pt_floor_w=PT_FLOOR_W,
-        wcent_dict=wcent,
-        include_mb=include_mb,
+        cent_bins=ctx["cent_bins"], y_edges=y_edges, pt_range_avg=pt_range_avg,
+        weight_mode=WEIGHT_MODE, y_ref=Y_REF, pt_floor_w=PT_FLOOR_W,
+        wcent_dict=wcent, include_mb=include_mb
     )
-
     y_cent = 0.5*(y_edges[:-1] + y_edges[1:])
     tags = tags_for_cent_bins(ctx["cent_bins"], include_mb=include_mb)
-    bands = {
-        tag: (np.asarray(out[tag]["r_central"], float),
-              np.asarray(out[tag]["r_lo"], float),
-              np.asarray(out[tag]["r_hi"], float))
-        for tag in tags
-    }
+    bands = {tag: (np.asarray(out[tag]["r_central"], float),
+                   np.asarray(out[tag]["r_lo"], float),
+                   np.asarray(out[tag]["r_hi"], float)) for tag in tags}
     return y_cent, tags, bands
 
-
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import numpy as np
-
-# Data retrieval for p+Pb @ 5.02 TeV
-y_cent, tags_y, npdf_y = npdf_vs_y(ctx, Y_EDGES, PT_RANGE_AVG, include_mb=True)
-
-# Layout: 2 rows, 4 columns (All panels will have identical size)
-n_rows, n_cols = 2, 4
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 9), sharex=True, sharey=True)
-plt.subplots_adjust(hspace=0, wspace=0) # Zero spacing for direct comparison
-axes_flat = axes.flatten()
-
-for ip, tag in enumerate(tags_y):
-    ax = axes_flat[ip]
-    Rc, Rlo, Rhi = npdf_y[tag]
-
-    x_edges, y_c  = step_from_centers(y_cent, Rc)
-    _,       y_lo = step_from_centers(y_cent, Rlo)
-    _,       y_hi = step_from_centers(y_cent, Rhi)
-
-    # --- Data Plotting (Consistent blue theme) ---
-    ax.step(x_edges, y_c, where="post", lw=1.8, color="tab:blue")
-    ax.fill_between(x_edges, y_lo, y_hi, step="post", color="tab:blue", alpha=0.25, linewidth=0.0)
-    ax.axhline(1.0, color="k", ls="-", lw=0.8)
-
-    # --- Standardized Annotations ---
-    # Centrality tag (Top Right)
-    ax.text(0.95, 0.92, tag, transform=ax.transAxes, ha="right", va="top", weight='bold', fontsize=11)
-    
-    # Rapidity labels moved to bottom right per your preference
-    if ip == 0:
-        ax.text(0.95, 0.08, rf"$p_T \in [{PT_RANGE_AVG[0]:.1f},\,{PT_RANGE_AVG[1]:.1f}]$ GeV",
-                transform=ax.transAxes, ha="right", va="bottom", color="black", fontsize=10)
-    
-    # Global Info (First panel only)
-    if ip == 0:
-        energy_label = rf"{ctx['sqrt_sNN']/1000:.2f} TeV" if ctx['sqrt_sNN'] > 500 else rf"{ctx['sqrt_sNN']:.0f} GeV"
-        ax.text(0.28, 0.88, rf"p+Pb @{energy_label}", transform=ax.transAxes, weight='bold', fontsize=10)
-
-    # --- Fixed Limits and Tick Formatting ---
-    ax.set_xlim(-5.0, 5.0)
-    ax.set_ylim(0.0, 1.50)
-    
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-    
-    ax.tick_params(which="both", direction="in", top=True, right=True, labelsize=11)
-
-    # --- Overlap Pruning for Equal-Sized Visuals ---
-    y_labels = ax.get_yticklabels()
-    if len(y_labels) > 0:
-        y_labels[0].set_visible(False)  # Prune 0.2 to avoid X-axis overlap
-        y_labels[-1].set_visible(False) # Prune 1.4 to avoid panel-above overlap
-
-    # Prune right-most X label for all but the last column
-    if (ip + 1) % n_cols != 0:
-        x_labels = ax.get_xticklabels()
-        if len(x_labels) > 0:
-            x_labels[-1].set_visible(False)
-
-    # Manual outer label control
-    ax.tick_params(labelbottom=(ip >= 3), labelleft=(ip % n_cols == 0))
-
-# Cleanly delete the 8th unused slot
-if len(tags_y) < len(axes_flat):
-    fig.delaxes(axes_flat[-1])
-
-# Unified Global Axis Labels
-fig.text(0.5, 0.04, r'$y$', ha='center', fontsize=18)
-fig.text(0.08, 0.5, r'$R^{\Upsilon}_{pA} (nPDF)$', va='center', rotation='vertical', fontsize=18)
-
-if SAVE_PDF:
-    fig.savefig(OUTDIR / f"RpA_nPDF_vs_y_{ctx['sqrt_sNN']}_TeV_FullGrid.pdf", bbox_inches="tight")
-plt.close()
-
 def npdf_vs_pT(ctx, y_window, pt_edges, include_mb=True, mb_c0=MB_C0):
-    y0, y1 = y_window
     wcent = make_centrality_weight_dict(ctx["cent_bins"], c0=mb_c0) if include_mb else None
-
     out = bin_rpa_vs_pT(
         ctx["df49_by_cent"], ctx["df_pp"], ctx["df_pa"], ctx["gluon"],
-        cent_bins=ctx["cent_bins"],
-        pt_edges=pt_edges,
-        y_window=(y0, y1),
-        weight_mode=WEIGHT_MODE,
-        y_ref=Y_REF,
-        pt_floor_w=PT_FLOOR_W,
-        wcent_dict=wcent,
-        include_mb=include_mb,
+        cent_bins=ctx["cent_bins"], pt_edges=pt_edges, y_window=y_window,
+        weight_mode=WEIGHT_MODE, y_ref=Y_REF, pt_floor_w=PT_FLOOR_W,
+        wcent_dict=wcent, include_mb=include_mb
     )
-
     pT_cent = 0.5*(pt_edges[:-1] + pt_edges[1:])
     tags = tags_for_cent_bins(ctx["cent_bins"], include_mb=include_mb)
-    bands = {
-        tag: (np.asarray(out[tag]["r_central"], float),
-              np.asarray(out[tag]["r_lo"], float),
-              np.asarray(out[tag]["r_hi"], float))
-        for tag in tags
-    }
+    bands = {tag: (np.asarray(out[tag]["r_central"], float),
+                   np.asarray(out[tag]["r_lo"], float),
+                   np.asarray(out[tag]["r_hi"], float)) for tag in tags}
     return pT_cent, tags, bands
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-import numpy as np
+def npdf_vs_centrality(ctx, y_window, pt_range_avg, mb_c0=MB_C0):
+    wcent = make_centrality_weight_dict(ctx["cent_bins"], c0=mb_c0)
+    width_weights = np.array([wcent[f"{int(a)}-{int(b)}%"] for (a,b) in ctx["cent_bins"]], float)
+    out = bin_rpa_vs_centrality(
+        ctx["df49_by_cent"], ctx["df_pp"], ctx["df_pa"], ctx["gluon"],
+        cent_bins=ctx["cent_bins"], y_window=y_window, pt_range_avg=pt_range_avg,
+        weight_mode=WEIGHT_MODE, y_ref=Y_REF, pt_floor_w=PT_FLOOR_W,
+        width_weights=width_weights
+    )
+    labels = [f"{int(a)}-{int(b)}%" for (a,b) in ctx["cent_bins"]]
+    Rc, Rlo, Rhi = np.asarray(out["r_central"]), np.asarray(out["r_lo"]), np.asarray(out["r_hi"])
+    mb = (float(out["mb_r_central"]), float(out["mb_r_lo"]), float(out["mb_r_hi"]))
+    return labels, Rc, Rlo, Rhi, mb
 
-n_rows = len(Y_WINDOWS)
-# Determine n_cols dynamically to ensure we capture Min-Bias and all centrality bins
-pT_temp, tags_temp, _ = npdf_vs_pT(ctx, Y_WINDOWS[0][:2], P_EDGES, include_mb=True)
-n_cols = len(tags_temp)
+# ── Main Run ────────────────────────────────────────────────────────
+def run_main():
+    etag = ENERGY.replace('.','p')
+    OUTDIR_MB   = ROOT / "outputs" / "npdf" / "min_bias" / f"pPb_{etag}TeV"
+    OUTDIR_CENT = ROOT / "outputs" / "npdf" / "centrality" / f"pPb_{etag}TeV"
+    OUTDIR_MB.mkdir(exist_ok=True, parents=True)
+    OUTDIR_CENT.mkdir(exist_ok=True, parents=True)
 
-# --- BALANCE FIX: DIMENSIONS ---
-# A width of 18 and height of (n_rows * 3) usually prevents vertical stretching.
-# If panels still feel too tall, reduce the '3' to '2.5'.
-fig_width = 18
-panel_height = 3.0 
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(fig_width, panel_height * n_rows), 
-                         sharex=True, sharey=True)
-plt.subplots_adjust(hspace=0, wspace=0)
+    print(f"  [OUT]   min_bias   → {OUTDIR_MB}")
+    print(f"  [OUT]   centrality  → {OUTDIR_CENT}")
 
-for row_idx, (y0, y1, y_name) in enumerate(Y_WINDOWS):
-    pT_cent, tags_pt, npdf_pt = npdf_vs_pT(ctx, (y0, y1), P_EDGES, include_mb=True)
+    # Ncoll mapping (optical default)
+    Ncoll_cent, Ncoll_MB = ncoll_by_cent_bins(ctx, optical=True)
+
+    # (A) R_pA vs y (Grid)
+    print(f"  [PLOT] R_pA vs y — full grid ...")
+    y_cent, tags_y, bands_y = npdf_vs_y(ctx, Y_EDGES, PT_RANGE_AVG, include_mb=True)
     
-    for col_idx, tag in enumerate(tags_pt):
-        if col_idx >= n_cols: break
-        ax = axes[row_idx, col_idx]
-        
-        # --- Data Plotting ---
-        Rc, Rlo, Rhi = npdf_pt[tag]
-        x_edges, y_c  = step_from_centers(pT_cent, Rc)
-        _,       y_lo = step_from_centers(pT_cent, Rlo)
-        _,       y_hi = step_from_centers(pT_cent, Rhi)
+    # Grid Plot (Gold Standard)
+    n_rows, n_cols = 2, 4
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 9), sharex=True, sharey=True, dpi=DPI)
+    plt.subplots_adjust(hspace=0, wspace=0)
+    axes_flat = axes.flatten()
+    for ip, tag in enumerate(tags_y):
+        ax = axes_flat[ip]
+        Rc, Rlo, Rhi = bands_y[tag]
+        xe, yc_s = step_from_centers(y_cent, Rc)
+        ax.step(xe, yc_s, where="post", lw=1.8, color="tab:blue")
+        ax.fill_between(xe, step_from_centers(y_cent, Rlo)[1], step_from_centers(y_cent, Rhi)[1], step="post", color="tab:blue", alpha=0.25, lw=0)
+        ax.axhline(1.0, color="k", ls="-", lw=0.8)
+        ax.text(0.95, 0.92, tag, transform=ax.transAxes, ha="right", va="top", weight='bold', fontsize=11)
+        ax.set_xlim(-5.0, 5.0); ax.set_ylim(0.0, 1.50)
+        ax.label_outer()
+    fig.text(0.5, 0.04, r'$y$', ha='center', fontsize=18)
+    fig.text(0.08, 0.5, r'$R^{\Upsilon}_{pA} (nPDF)$', va='center', rotation='vertical', fontsize=18)
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.pdf", bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig)
+    save_consolidated_y_csv(OUTDIR_CENT / f"Table_RAA_vs_y_Grid_{etag}TeV.csv", y_cent, bands_y, tags_y)
 
-        ax.step(x_edges, y_c, where="post", lw=1.5, color="tab:blue")
-        ax.fill_between(x_edges, y_lo, y_hi, step="post", color="tab:blue", alpha=0.3, linewidth=0.0)
-        ax.axhline(1.0, color="gray", ls="--", lw=0.8)
-        
-        # --- Clean Annotations ---
-        # Rapidity: Only in the first panel of each row to reduce clutter
-        ax.text(0.08, 0.08, rf"${y0:.1f} < y < {y1:.1f}$", transform=ax.transAxes, 
-                    color="navy", fontsize=11, fontweight='bold', 
-                    bbox=dict(facecolor='white', alpha=0.8, edgecolor='none', pad=1))
-        
-        # Centrality/MB Tag: Top Right of every panel
-        ax.text(0.92, 0.88, tag, transform=ax.transAxes, ha="right", weight='bold', fontsize=10)
-        
-        # Global Info: Only Top-Left panel
-        if row_idx == 0 and col_idx == 0:
-            energy_label = rf"{ctx['sqrt_sNN']/1000:.2f} TeV" if ctx['sqrt_sNN'] > 500 else rf"{ctx['sqrt_sNN']:.0f} GeV"
-            ax.text(0.28, 0.40, rf"p+Pb @{energy_label}", transform=ax.transAxes, weight='bold',fontsize=10)
+    # MB-only y plot
+    Rc_mb, Rlo_mb, Rhi_mb = bands_y["MB"]
+    fig_mb, ax_mb = plt.subplots(figsize=(8,5), dpi=DPI)
+    xe, yc_s = step_from_centers(y_cent, Rc_mb)
+    ax_mb.step(xe, yc_s, where="post", lw=2, color="tab:blue", label="nPDF (EPPS21)")
+    ax_mb.fill_between(xe, step_from_centers(y_cent, Rlo_mb)[1], step_from_centers(y_cent, Rhi_mb)[1], step="post", color="tab:blue", alpha=ALPHA_BAND, lw=0)
+    ax_mb.axhline(1.0, color="k", ls="-", lw=0.8)
+    ax_mb.set_xlabel(r"$y$", fontsize=14); ax_mb.set_ylabel(r"$R^{\Upsilon}_{pA}$ (nPDF)", fontsize=14)
+    ax_mb.set_xlim(-5, 5); ax_mb.set_ylim(0.4, 1.3)
+    ax_mb.legend(loc="lower right", frameon=False, fontsize=12)
+    ax_mb.text(0.03, 0.95, rf"p+Pb @ {ENERGY} TeV  (Min. Bias)", transform=ax_mb.transAxes, ha="left", va="top", fontsize=13, fontweight="bold")
+    fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.pdf", bbox_inches="tight")
+    fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig_mb)
 
-        # --- Axis Limits & Formatting ---
-        ax.set_xlim(0, 15.0) # Standardized for pPb
-        ax.set_ylim(0.0, 1.50)
-        
-        # Consistent Tick Spacing
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(3))
-        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.2))
-        
-        # --- Overlap Removal ---
-        # Pruning the 'both' (min and max) labels is essential when hspace/wspace = 0
-        ax.xaxis.set_major_locator(ticker.MaxNLocator(nbins=8, prune='both'))
-        ax.yaxis.set_major_locator(ticker.MaxNLocator(nbins=9, prune='both'))
-        
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-        
-        ax.tick_params(axis='both', which='both', direction='in', top=True, right=True, labelsize=11)
-        ax.label_outer() 
+    # (B) R_pA vs pT (Grid)
+    print(f"  [PLOT] R_pA vs pT — full grid ...")
+    all_bands_pT = {}
+    n_rows, n_cols = len(Y_WINDOWS), len(tags_y)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 3.0*n_rows), sharex=True, sharey=True, dpi=DPI)
+    plt.subplots_adjust(hspace=0, wspace=0)
+    for row_idx, (y0, y1, yname) in enumerate(Y_WINDOWS):
+        pc, tags_pt, bands_pt = npdf_vs_pT(ctx, (y0, y1), P_EDGES, include_mb=True)
+        all_bands_pT[yname] = bands_pt
+        for col_idx, tag in enumerate(tags_pt):
+            ax = axes[row_idx, col_idx]
+            Rc, Rlo, Rhi = bands_pt[tag]
+            xe, yc_s = step_from_centers(pc, Rc)
+            ax.step(xe, yc_s, where="post", lw=1.5, color="tab:blue")
+            ax.fill_between(xe, step_from_centers(pc, Rlo)[1], step_from_centers(pc, Rhi)[1], step="post", color="tab:blue", alpha=0.3, lw=0)
+            ax.axhline(1.0, color="gray", ls="--", lw=0.8)
+            ax.text(0.92, 0.88, tag, transform=ax.transAxes, ha="right", weight='bold', fontsize=10)
+            ax.text(0.08, 0.08, yname, transform=ax.transAxes, color="navy", fontsize=11, fontweight='bold')
+            ax.set_xlim(0, 15.0); ax.set_ylim(0.0, 1.50)
+            ax.label_outer()
+    fig.text(0.5, 0.04, r'$p_T$ (GeV)', ha='center', fontsize=20)
+    fig.text(0.08, 0.5, r'$R^{\Upsilon}_{pA} (nPDF)$', va='center', rotation='vertical', fontsize=20)
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.pdf", bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig)
+    save_consolidated_pT_csv(OUTDIR_CENT / f"Table_RAA_vs_pT_Grid_{etag}TeV.csv", pc, all_bands_pT, tags_pt)
 
-# Global Axis Labels
-fig.text(0.5, 0.04, r'$p_T$ (GeV)', ha='center', fontsize=20)
-fig.text(0.08, 0.5, r'$R^{\Upsilon}_{pA} (nPDF)$', va='center', rotation='vertical', fontsize=20)
+    # MB-only pT (3 windows)
+    fig_mb_pt, axes_mb_pt = plt.subplots(1, 3, figsize=(15, 5), dpi=DPI, sharey=True)
+    for ax, (y0, y1, yname) in zip(axes_mb_pt, Y_WINDOWS):
+        pc_mb, tags_pt_mb, bands_pt_mb = npdf_vs_pT(ctx, (y0, y1), P_EDGES, include_mb=True)
+        Rc, Rlo, Rhi = bands_pt_mb["MB"]
+        xe, yc_s = step_from_centers(pc_mb, Rc)
+        ax.step(xe, yc_s, where="post", lw=2, color="tab:blue", label="nPDF (EPPS21)")
+        ax.fill_between(xe, step_from_centers(pc_mb, Rlo)[1], step_from_centers(pc_mb, Rhi)[1], step="post", color="tab:blue", alpha=ALPHA_BAND, lw=0)
+        ax.axhline(1.0, color="k", ls="-", lw=0.8)
+        ax.text(0.5, 0.92, yname, transform=ax.transAxes, ha="center", va="top", fontsize=11, fontweight="bold")
+        ax.set_xlabel(r"$p_T$ (GeV)", fontsize=12)
+        if ax == axes_mb_pt[0]:
+            ax.set_ylabel(r"$R^{\Upsilon}_{pA}$ (nPDF)", fontsize=12)
+            ax.text(0.05, 0.05, f"p+Pb @ {ENERGY} TeV\nMin. Bias", transform=ax.transAxes, fontsize=10)
+        ax.set_xlim(0, 15); ax.set_ylim(0.4, 1.3)
+    fig_mb_pt.tight_layout()
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_pT_MB_{etag}TeV.pdf", bbox_inches="tight")
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_pT_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig_mb_pt)
 
-if SAVE_PDF:
-    plt.savefig(OUTDIR / f"RpA_nPDF_vs_pT_{ctx['sqrt_sNN']}_TeV_FullGrid.pdf", bbox_inches="tight")
-plt.close()
+    # (C) R_pA vs Centrality
+    print(f"  [PLOT] R_pA vs centrality ...")
+    npdf_cent_all_dict = {}
+    for y0, y1, yname in Y_WINDOWS:
+        res = npdf_vs_centrality(ctx, (y0, y1), PT_RANGE_AVG)
+        npdf_cent_all_dict[yname] = res
+    
+    # Re-use existing plotters if possible, or simple inline
+    save_consolidated_cent_csv(OUTDIR_CENT / f"Table_RAA_vs_Centrality_{etag}TeV.csv", ctx, npdf_cent_all_dict, Ncoll_cent, Ncoll_MB)
 
-
+if __name__ == "__main__":
+    run_main()
+    print("\n DONE — Consolidated pPb nPDF Outputs.")
 

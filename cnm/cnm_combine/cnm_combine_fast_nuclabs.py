@@ -35,8 +35,8 @@ from npdf_data import NPDFSystem, RpAAnalysis
 from gluon_ratio import EPPS21Ratio, GluonEPPSProvider
 
 # Import the ABSORPTION-enabled nPDF module
-import npdf_nuclAbs_centrality_dAu as npdf_nuclabs
-from npdf_nuclAbs_centrality_dAu import (
+import npdf_centrality_dAu as npdf_nuclabs
+from npdf_centrality_dAu import (
     NuclearAbsorption,
     compute_df49_by_centrality,
     make_centrality_weight_dict,
@@ -262,9 +262,10 @@ def rpa_binned_batch_driver(
 ):
     """
     Computes binned results for ALL bins and ALL centralities using batch processing.
-    mode="vs_y": bins_a are Y edges, bins_b is pT range.
-    mode="vs_pT": bins_a are pT edges, bins_b is Y range.
     """
+    if not _HAS_TORCH:
+        raise RuntimeError("cnm_combine_fast: torch required for vectorized kernels.")
+    
     device = EC._qp_device(qp_base)
     
     labels = [f"{int(a)}-{int(b)}%" for (a,b) in cent_bins]
@@ -598,13 +599,15 @@ class CNMCombineFast(CNMCombineBase):
         if pt_range_avg is None: pt_range_avg = self.pt_range_avg
         
         # 1. Call nPDF part (reusing base tools)
-        wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0) if include_mb else None
-        
-        npdf_bins_y = bin_rpa_vs_y(
-            self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
-            cent_bins=self.cent_bins, y_edges=y_edges, pt_range_avg=pt_range_avg, weight_mode=self.weight_mode, y_ref=self.y_ref,
-            pt_floor_w=self.pt_floor_w, wcent_dict=wcent, include_mb=include_mb
-        )
+        if self.npdf_ctx is not None:
+            wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0) if include_mb else None
+            npdf_bins_y = bin_rpa_vs_y(
+                self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
+                cent_bins=self.cent_bins, y_edges=y_edges, pt_range_avg=pt_range_avg, weight_mode=self.weight_mode, y_ref=self.y_ref,
+                pt_floor_w=self.pt_floor_w, wcent_dict=wcent, include_mb=include_mb
+            )
+        else:
+            npdf_bins_y = None
         
         # 2. Call FAST eloss
         y_cent, bands_y, labels = self._calc_eloss_broad_band_vs_y(y_edges, pt_range_avg, ["loss","broad","eloss_broad"])
@@ -618,12 +621,15 @@ class CNMCombineFast(CNMCombineBase):
         if len(y_window)==3: y0,y1,_=y_window
         else: y0,y1=y_window
         
-        wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0) if include_mb else None
-        npdf_bins = bin_rpa_vs_pT(
-            self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
-            cent_bins=self.cent_bins, pt_edges=pt_edges, y_window=(y0,y1), weight_mode=self.weight_mode, y_ref=self.y_ref,
-            pt_floor_w=self.pt_floor_w, wcent_dict=wcent, include_mb=include_mb
-        )
+        if self.npdf_ctx is not None:
+            wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0) if include_mb else None
+            npdf_bins = bin_rpa_vs_pT(
+                self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
+                cent_bins=self.cent_bins, pt_edges=pt_edges, y_window=(y0,y1), weight_mode=self.weight_mode, y_ref=self.y_ref,
+                pt_floor_w=self.pt_floor_w, wcent_dict=wcent, include_mb=include_mb
+            )
+        else:
+            npdf_bins = None
         
         pT_cent, bands_pt, labels = self._calc_eloss_broad_band_vs_pT(pt_edges, (y0,y1), ["loss","broad","eloss_broad"])
         
@@ -652,13 +658,16 @@ class CNMCombineFast(CNMCombineBase):
         # Here array_of_bins has length 1.
         
         # nPDF
-        wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0)
-        width_weights = np.array([wcent[f"{int(a)}-{int(b)}%"] for (a, b) in self.cent_bins], float)
-        npdf_cent = bin_rpa_vs_centrality(
-             self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
-             cent_bins=self.cent_bins, y_window=(y0,y1), pt_range_avg=pt_range_avg, weight_mode=self.weight_mode, y_ref=self.y_ref,
-             pt_floor_w=self.pt_floor_w, width_weights=width_weights
-        )
+        if self.npdf_ctx is not None:
+            wcent = make_centrality_weight_dict(self.cent_bins, c0=self.cent_c0)
+            width_weights = np.array([wcent[f"{int(a)}-{int(b)}%"] for (a, b) in self.cent_bins], float)
+            npdf_cent = bin_rpa_vs_centrality(
+                 self.npdf_ctx["df49_by_cent"], self.npdf_ctx["df_pp"], self.npdf_ctx["df_pa"], self.npdf_ctx["gluon"],
+                 cent_bins=self.cent_bins, y_window=(y0,y1), pt_range_avg=pt_range_avg, weight_mode=self.weight_mode, y_ref=self.y_ref,
+                 pt_floor_w=self.pt_floor_w, width_weights=width_weights
+            )
+        else:
+            npdf_cent = None
         
         # Fast ELOSS
         # We compute for 'vs_y' but with a single bin cover y0..y1
@@ -677,15 +686,16 @@ class CNMCombineFast(CNMCombineBase):
         cnm_cent = {}
         tags = _tags_for_cent_bins(self.cent_bins, include_mb=include_mb) # e.g. "0-20%", ..., "MB"
         
-        # Build arrays for plotting
-        # nPDF
-        Rc_n = np.asarray(npdf_cent["r_central"], float)
-        Rlo_n = np.asarray(npdf_cent["r_lo"], float)
-        Rhi_n = np.asarray(npdf_cent["r_hi"], float)
-        mb_n = (float(npdf_cent["mb_r_central"]), float(npdf_cent["mb_r_lo"]), float(npdf_cent["mb_r_hi"]))
-        
-        if "npdf" in components:
+        if "npdf" in components and npdf_cent is not None:
+            # nPDF
+            Rc_n = np.asarray(npdf_cent["r_central"], float)
+            Rlo_n = np.asarray(npdf_cent["r_lo"], float)
+            Rhi_n = np.asarray(npdf_cent["r_hi"], float)
+            mb_n = (float(npdf_cent["mb_r_central"]), float(npdf_cent["mb_r_lo"]), float(npdf_cent["mb_r_hi"]))
             cnm_cent["npdf"] = (Rc_n, Rlo_n, Rhi_n, *mb_n)
+        else:
+            Rc_n = Rlo_n = Rhi_n = None
+            mb_n = (1.0, 1.0, 1.0) # Dummy for combine
 
         # process local bands
         for comp in ["loss", "broad", "eloss_broad"]:
@@ -717,20 +727,19 @@ class CNMCombineFast(CNMCombineBase):
             Rtot_lo = np.array([float(Rt_lo[lab][0]) for lab in labels])
             Rtot_hi = np.array([float(Rt_hi[lab][0]) for lab in labels])
 
-            Rc_cnm, Rlo_cnm, Rhi_cnm = combine_two_bands_1d(
-                Rc_n, Rlo_n, Rhi_n, Rtot_c, Rtot_lo, Rtot_hi
-            )
-
-            # MB part
-            Rmb_t_c = float(Rt_c["MB"][0])
-            Rmb_t_lo = float(Rt_lo["MB"][0])
-            Rmb_t_hi = float(Rt_hi["MB"][0])
-            
-            rmb_c, rmb_lo, rmb_hi = combine_two_bands_1d(
-                np.array([mb_n[0]]), np.array([mb_n[1]]), np.array([mb_n[2]]),
-                np.array([Rmb_t_c]), np.array([Rmb_t_lo]), np.array([Rmb_t_hi])
-            )
-            cnm_cent["cnm"] = (Rc_cnm, Rlo_cnm, Rhi_cnm, float(rmb_c[0]), float(rmb_lo[0]), float(rmb_hi[0]))
+            if Rc_n is not None:
+                Rc_cnm, Rlo_cnm, Rhi_cnm = combine_two_bands_1d(
+                    Rc_n, Rlo_n, Rhi_n, Rtot_c, Rtot_lo, Rtot_hi
+                )
+                # MB part
+                rmb_c, rmb_lo, rmb_hi = combine_two_bands_1d(
+                    np.array([mb_n[0]]), np.array([mb_n[1]]), np.array([mb_n[2]]),
+                    np.array([float(Rt_c["MB"][0])]), np.array([float(Rt_lo["MB"][0])]), np.array([float(Rt_hi["MB"][0])])
+                )
+                cnm_cent["cnm"] = (Rc_cnm, Rlo_cnm, Rhi_cnm, float(rmb_c[0]), float(rmb_lo[0]), float(rmb_hi[0]))
+            else:
+                # CNM is just ELoss+Broad if nPDF missing
+                cnm_cent["cnm"] = (Rtot_c, Rtot_lo, Rtot_hi, float(Rt_c["MB"][0]), float(Rt_lo["MB"][0]), float(Rt_hi["MB"][0]))
 
         return cnm_cent
 
@@ -750,14 +759,17 @@ class CNMCombineFast(CNMCombineBase):
                     Dhi[tag] = np.asarray(d["r_hi"], float)
                 elif comp == "cnm":
                     # Need npdf and eloss_broad
-                    dn = npdf_data[tag]
-                    rnc, rnlo, rnhi = np.asarray(dn["r_central"]), np.asarray(dn["r_lo"]), np.asarray(dn["r_hi"])
-                    
                     rtc, rtlo, rthi = band_data["eloss_broad"]
                     rtc, rtlo, rthi = rtc[tag], rtlo[tag], rthi[tag]
-                    
-                    rc, rlo, rhi = combine_two_bands_1d(rnc, rnlo, rnhi, rtc, rtlo, rthi)
-                    Dc[tag], Dlo[tag], Dhi[tag] = rc, rlo, rhi
+
+                    if npdf_data is not None and tag in npdf_data:
+                        dn = npdf_data[tag]
+                        rnc, rnlo, rnhi = np.asarray(dn["r_central"]), np.asarray(dn["r_lo"]), np.asarray(dn["r_hi"])
+                        rc, rlo, rhi = combine_two_bands_1d(rnc, rnlo, rnhi, rtc, rtlo, rthi)
+                        Dc[tag], Dlo[tag], Dhi[tag] = rc, rlo, rhi
+                    else:
+                        # eloss only
+                        Dc[tag], Dlo[tag], Dhi[tag] = rtc, rtlo, rthi
                 else:
                     # Map loop to eloss keys
                     # cnm_combine uses "eloss" key but EC returns "loss"

@@ -25,7 +25,11 @@ Author: you + ChatGPT (finalized)
 from __future__ import annotations
 import math
 import numpy as np
-import torch
+try:
+    import torch
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal, Callable, Dict
@@ -218,16 +222,14 @@ def alpha_s(mu,
     α_s(μ) with selectable loop order and method.
     """
     # If mu is an array/tensor, evaluate vectorized
-    if isinstance(mu, (np.ndarray, torch.Tensor)):
+    is_torch = _HAS_TORCH and isinstance(mu, torch.Tensor)
+    if is_torch or isinstance(mu, np.ndarray):
         cfg = AlphaSConfig(Nf=Nf, loops=loops, muRef=muRef, alphaRef=alphaRef,
                            LambdaQCD=LambdaQCD, method=method,
                            freeze=freeze, alpha_max=alpha_max)
         # Asym method is easily vectorized
         if method == "asym":
-             # We need to adapt _asym_series to handle arrays. 
-             # For now, let's just do it point-by-point to be safe, 
-             # but bypass the cache.
-             if isinstance(mu, torch.Tensor):
+             if is_torch:
                  mu_np = mu.detach().cpu().numpy()
                  res = np.array([_asym_series(float(m), cfg) for m in mu_np.ravel()])
                  return torch.from_numpy(res.reshape(mu.shape)).to(mu.device)
@@ -236,7 +238,7 @@ def alpha_s(mu,
                  return res.reshape(mu.shape)
         
         # ODE method: point-by-point
-        if isinstance(mu, torch.Tensor):
+        if is_torch:
             mu_np = mu.detach().cpu().numpy()
             res = np.array([_ode_solve(float(m), cfg) for m in mu_np.ravel()])
             return torch.from_numpy(res.reshape(mu.shape)).to(mu.device)

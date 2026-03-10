@@ -205,34 +205,59 @@ def npdf_vs_pT(ctx, y_window, pt_edges, include_mb=True, mb_c0=MB_C0):
                  np.asarray(out[t]["r_hi"],float)) for t in tags}
     return pc, tags, bands
 
-# ── CSV savers ──────────────────────────────────────────────────────
-def save_csv_y(outdir, yc, bands, tags, energy, suffix=""):
-    for tag in tags:
-        Rc, Rlo, Rhi = bands[tag]
-        df = pd.DataFrame({"y_center": yc, "R_central": Rc, "R_lo": Rlo, "R_hi": Rhi})
-        st = tag.replace("%","pct").replace(" ","")
-        df.to_csv(outdir / f"Upsilon_RpA_nPDF_vs_y_{st}_{energy.replace('.','p')}TeV{suffix}.csv", index=False)
-
-def save_csv_pT(outdir, pc, bands, tags, energy, yname=""):
-    for tag in tags:
-        Rc, Rlo, Rhi = bands[tag]
-        df = pd.DataFrame({"pT_center": pc, "R_central": Rc, "R_lo": Rlo, "R_hi": Rhi})
-        st = tag.replace("%","pct").replace(" ","")
-        yn = yname.replace(" ","").replace("<","").replace(">","").replace("$","").replace("\\","")
-        df.to_csv(outdir / f"Upsilon_RpA_nPDF_vs_pT_{st}_{yn}_{energy.replace('.','p')}TeV.csv", index=False)
-
-def save_csv_cent(outdir, ctx, labels, Rc, Rlo, Rhi, mb, Ncoll_cent, Ncoll_MB, yname, energy):
+# ── CSV savers (Consolidated HEPData Style) ─────────────────────────
+def save_consolidated_y_csv(filepath, yc, bands_y, tags):
+    ye = edges_from_centers(yc)
     rows = []
-    for i, ((cL,cR), lab) in enumerate(zip(ctx["cent_bins"], labels)):
-        rows.append(dict(cent_left=float(cL), cent_right=float(cR), label=lab,
-                         Ncoll=float(Ncoll_cent[i]), R_central=float(Rc[i]),
-                         R_lo=float(Rlo[i]), R_hi=float(Rhi[i]), is_MB=False))
-    rows.append(dict(cent_left=0, cent_right=100, label="MB",
-                     Ncoll=float(Ncoll_MB), R_central=float(mb[0]),
-                     R_lo=float(mb[1]), R_hi=float(mb[2]), is_MB=True))
-    yn = yname.replace(" ","").replace("<","").replace(">","").replace("$","").replace("\\","")
-    pd.DataFrame(rows).to_csv(
-        outdir / f"Upsilon_RpA_nPDF_vs_cent_{yn}_{energy.replace('.','p')}TeV.csv", index=False)
+    for tag in tags:
+        Rc, Rlo, Rhi = bands_y[tag]
+        for i in range(len(yc)):
+            rows.append({
+                "Variable": "Rapidity (y)",
+                "Bin_Low": float(ye[i]), "Bin_High": float(ye[i+1]),
+                "Centrality": tag,
+                "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i])
+            })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
+
+def save_consolidated_pT_csv(filepath, pc, all_bands_pT, tags):
+    # all_bands_pT: {yname: bands_dict}
+    pe = edges_from_centers(pc)
+    rows = []
+    for yname, bands_pt in all_bands_pT.items():
+        for tag in tags:
+            Rc, Rlo, Rhi = bands_pt[tag]
+            for i in range(len(pc)):
+                rows.append({
+                    "Rapidity_Window": yname,
+                    "pT_Low": float(pe[i]), "pT_High": float(pe[i+1]),
+                    "Centrality": tag,
+                    "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i])
+                })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
+
+def save_consolidated_cent_csv(filepath, ctx, cent_data_all, Ncoll_cent, Ncoll_MB):
+    # cent_data_all: {yname: (labels, Rc, Rlo, Rhi, mb_tuple)}
+    rows = []
+    for yname, (labels, Rc, Rlo, Rhi, mb) in cent_data_all.items():
+        # Centrality bins
+        for i, ((cL,cR), lab) in enumerate(zip(ctx["cent_bins"], labels)):
+            rows.append({
+                "Rapidity_Window": yname,
+                "Cent_Low": float(cL), "Cent_High": float(cR),
+                "Ncoll": float(Ncoll_cent[i]),
+                "RAA_Central": float(Rc[i]), "RAA_Err_Lo": float(Rlo[i]), "RAA_Err_Hi": float(Rhi[i]),
+                "is_MB": False
+            })
+        # MB bin
+        rows.append({
+            "Rapidity_Window": yname,
+            "Cent_Low": 0.0, "Cent_High": 100.0,
+            "Ncoll": float(Ncoll_MB),
+            "RAA_Central": float(mb[0]), "RAA_Err_Lo": float(mb[1]), "RAA_Err_Hi": float(mb[2]),
+            "is_MB": True
+        })
+    pd.DataFrame(rows).to_csv(filepath, index=False)
 
 # ============= PLOTTING FUNCTIONS ====================================
 
@@ -400,98 +425,97 @@ def plot_rpa_vs_Ncoll(ctx, Ncoll_cent, Ncoll_MB, npdf_cent_all, energy):
 def run_energy(energy):
     ctx = build_npdf_context(energy)
     etag = energy.replace(".","p")
-    OUTDIR_MB   = OUTDIR_BASE_MB   / f"pPb_{etag}TeV"
-    OUTDIR_CENT = OUTDIR_BASE_CENT / f"pPb_{etag}TeV"
+    # Robust subfolder organization
+    OUTDIR_MB   = ROOT / "outputs" / "npdf" / "min_bias" / f"pPb_{etag}TeV"
+    OUTDIR_CENT = ROOT / "outputs" / "npdf" / "centrality" / f"pPb_{etag}TeV"
     OUTDIR_MB.mkdir(exist_ok=True, parents=True)
     OUTDIR_CENT.mkdir(exist_ok=True, parents=True)
-    Ncoll_cent, Ncoll_MB = ncoll_by_cent_bins(ctx)
-    print(f"  [Ncoll] bins: {np.round(Ncoll_cent,3)},  MB: {Ncoll_MB:.3f}")
-    print(f"  [OUT]   min_bias  → {OUTDIR_MB}")
-    print(f"  [OUT]   centrality → {OUTDIR_CENT}")
 
-    # ── 1. R_pA vs y (centrality + MB grid) ──────────────────
+    Ncoll_cent, Ncoll_MB = ncoll_by_cent_bins(ctx)
+    print(f"  [OUT]   min_bias   → {OUTDIR_MB}")
+    print(f"  [OUT]   centrality  → {OUTDIR_CENT}")
+
+    # ── 1. R_pA vs y (Grid) ──────────────────
     print(f"  [PLOT] R_pA vs y — full grid ...")
     yc, tags_y, bands_y = npdf_vs_y(ctx, Y_EDGES, PT_RANGE_AVG, include_mb=True)
     fig = plot_rpa_vs_y_grid(ctx, yc, tags_y, bands_y, energy)
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.pdf",
-                bbox_inches="tight")
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.png",
-                dpi=DPI, bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.pdf", bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_y_{etag}TeV_FullGrid.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig)
-    save_csv_y(OUTDIR_CENT, yc, bands_y, tags_y, energy)
-    print(f"    → saved FullGrid y-plots + CSV in centrality/")
-
-    # ── 1b. MB-only R_pA vs y (separate) ────────────────
+    # Consolidated CSV
+    save_consolidated_y_csv(OUTDIR_CENT / f"Table_RAA_vs_y_Grid_{etag}TeV.csv", yc, bands_y, tags_y)
+    
+    # MB-only y plot (Gold Standard)
     if "MB" in bands_y:
         Rc_mb, Rlo_mb, Rhi_mb = bands_y["MB"]
         fig_mb, ax_mb = plt.subplots(figsize=(8,5), dpi=DPI)
         xe, yc_s = step_from_centers(yc, Rc_mb)
-        _, ylo_s = step_from_centers(yc, Rlo_mb)
-        _, yhi_s = step_from_centers(yc, Rhi_mb)
         ax_mb.step(xe, yc_s, where="post", lw=2, color="tab:blue", label="nPDF (EPPS21)")
-        ax_mb.fill_between(xe, ylo_s, yhi_s, step="post", color="tab:blue",
-                           alpha=ALPHA_BAND, linewidth=0)
+        ax_mb.fill_between(xe, step_from_centers(yc, Rlo_mb)[1], step_from_centers(yc, Rhi_mb)[1],
+                           step="post", color="tab:blue", alpha=ALPHA_BAND, linewidth=0)
         ax_mb.axhline(1.0, color="k", ls="-", lw=0.8)
-        ax_mb.set_xlabel(r"$y$", fontsize=14)
-        ax_mb.set_ylabel(r"$R^{\Upsilon}_{pA}$ (nPDF)", fontsize=14)
+        ax_mb.set_xlabel(r"$y$", fontsize=14); ax_mb.set_ylabel(r"$R^{\Upsilon}_{pA}$ (nPDF)", fontsize=14)
         ax_mb.set_xlim(-5, 5); ax_mb.set_ylim(0.4, 1.3)
-        ax_mb.xaxis.set_major_locator(ticker.MultipleLocator(1))
-        ax_mb.yaxis.set_major_locator(ticker.MultipleLocator(0.1))
-        ax_mb.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax_mb.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax_mb.tick_params(which="both", direction="in", top=True, right=True)
         ax_mb.legend(loc="lower right", frameon=False, fontsize=12)
         elabel = rf"p+Pb @ $\sqrt{{s_{{NN}}}}={ctx['sqrt_sNN']/1000:.2f}$ TeV"
-        ax_mb.text(0.03, 0.95, elabel + "  (Min. Bias)", transform=ax_mb.transAxes,
-                   ha="left", va="top", fontsize=13, fontweight="bold")
-        fig_mb.tight_layout()
-        fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.pdf",
-                       bbox_inches="tight")
-        fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.png",
-                       dpi=DPI, bbox_inches="tight")
-        pd.DataFrame({"y_center": yc, "R_central": Rc_mb, "R_lo": Rlo_mb, "R_hi": Rhi_mb})\
-          .to_csv(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.csv", index=False)
+        ax_mb.text(0.03, 0.95, elabel + "  (Min. Bias)", transform=ax_mb.transAxes, ha="left", va="top", fontsize=13, fontweight="bold")
+        fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.pdf", bbox_inches="tight")
+        fig_mb.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_y_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
         plt.close(fig_mb)
-        print(f"    → saved MB-only y-plot + CSV in min_bias/")
 
-    # ── 2. R_pA vs pT (full grid) ────────────────────────
+    # ── 2. R_pA vs pT (Grid) ────────────────────────
     print(f"  [PLOT] R_pA vs pT — full grid ...")
     fig = plot_rpa_vs_pT_grid(ctx, Y_WINDOWS, energy)
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.pdf",
-                bbox_inches="tight")
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.png",
-                dpi=DPI, bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.pdf", bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_pT_{etag}TeV_FullGrid.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig)
+    
+    all_bands_pT = {}
     for y0,y1,yname in Y_WINDOWS:
         pc, tags_pt, npdf_pt = npdf_vs_pT(ctx, (y0,y1), P_EDGES, include_mb=True)
-        save_csv_pT(OUTDIR_CENT, pc, npdf_pt, tags_pt, energy, yname)
-    print(f"    → saved FullGrid pT-plots + CSV in centrality/")
+        all_bands_pT[yname] = npdf_pt
+    save_consolidated_pT_csv(OUTDIR_CENT / f"Table_RAA_vs_pT_Grid_{etag}TeV.csv", pc, all_bands_pT, tags_pt)
 
-    # ── 3. R_pA vs centrality % ──────────────────────────
+    # MB-only pT (3 windows)
+    print(f"  [PLOT] MB-only R_pA vs pT (3 windows) ...")
+    fig_mb_pt, axes_mb_pt = plt.subplots(1, 3, figsize=(15, 5), dpi=DPI, sharey=True)
+    for ax, (y0, y1, yname) in zip(axes_mb_pt, Y_WINDOWS):
+        pc_mb, tags_pt_mb, bands_pt_mb = npdf_vs_pT(ctx, (y0, y1), P_EDGES, include_mb=True)
+        Rc, Rlo, Rhi = bands_pt_mb["MB"]
+        xe, yc_s = step_from_centers(pc_mb, Rc)
+        ax.step(xe, yc_s, where="post", lw=2, color="tab:blue", label="nPDF (EPPS21)")
+        ax.fill_between(xe, step_from_centers(pc_mb, Rlo)[1], step_from_centers(pc_mb, Rhi)[1],
+                        step="post", color="tab:blue", alpha=ALPHA_BAND, linewidth=0)
+        ax.axhline(1.0, color="k", ls="-", lw=0.8)
+        ax.text(0.5, 0.92, yname, transform=ax.transAxes, ha="center", va="top", fontsize=11, fontweight="bold")
+        ax.set_xlabel(r"$p_T$ (GeV)", fontsize=12)
+        if ax == axes_mb_pt[0]:
+            ax.set_ylabel(r"$R^{\Upsilon}_{pA}$ (nPDF)", fontsize=12)
+            elabel = rf"p+Pb @ $\sqrt{{s_{{NN}}}}={ctx['sqrt_sNN']/1000:.2f}$ TeV"
+            ax.text(0.05, 0.05, elabel + "\nMin. Bias", transform=ax.transAxes, fontsize=10)
+        ax.set_xlim(0, 15); ax.set_ylim(0.4, 1.3)
+    fig_mb_pt.tight_layout()
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_pT_MB_{etag}TeV.pdf", bbox_inches="tight")
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_nPDF_vs_pT_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig_mb_pt)
+
+    # ── 3. R_pA vs centrality ──────────────────────────
     print(f"  [PLOT] R_pA vs centrality ...")
     npdf_cent_all = {}
     for y0,y1,yname in Y_WINDOWS:
         labels, Rc, Rlo, Rhi, mb = npdf_vs_centrality(ctx, (y0,y1), PT_RANGE_AVG)
         npdf_cent_all[yname] = (labels, Rc, Rlo, Rhi, mb)
-        save_csv_cent(OUTDIR_CENT, ctx, labels, Rc, Rlo, Rhi, mb,
-                      Ncoll_cent, Ncoll_MB, yname, energy)
+    
     fig = plot_rpa_vs_centrality(ctx, Ncoll_cent, Ncoll_MB, npdf_cent_all, energy)
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_centrality_{etag}TeV.pdf",
-                bbox_inches="tight")
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_centrality_{etag}TeV.png",
-                dpi=DPI, bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_centrality_{etag}TeV.pdf", bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_centrality_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig)
-    print(f"    → saved centrality plots + CSV in centrality/")
 
-    # ── 4. R_pA vs <Ncoll> ───────────────────────────────
-    print(f"  [PLOT] R_pA vs Ncoll ...")
     fig = plot_rpa_vs_Ncoll(ctx, Ncoll_cent, Ncoll_MB, npdf_cent_all, energy)
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_Ncoll_{etag}TeV.pdf",
-                bbox_inches="tight")
-    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_Ncoll_{etag}TeV.png",
-                dpi=DPI, bbox_inches="tight")
+    fig.savefig(OUTDIR_CENT / f"Upsilon_RpA_nPDF_vs_Ncoll_{etag}TeV.pdf", bbox_inches="tight")
     plt.close(fig)
-    print(f"    → saved Ncoll plots in centrality/")
+    
+    save_consolidated_cent_csv(OUTDIR_CENT / f"Table_RAA_vs_Centrality_{etag}TeV.csv", ctx, npdf_cent_all, Ncoll_cent, Ncoll_MB)
 
     print(f"\n  ✓ DONE — p+Pb @ {energy} TeV\n")
 

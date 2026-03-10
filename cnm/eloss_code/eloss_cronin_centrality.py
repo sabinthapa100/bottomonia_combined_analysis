@@ -59,6 +59,8 @@ from particle import Particle, PPSpectrumParams
 from glauber import OpticalGlauber
 import quenching_fast as QF
 
+import matplotlib.ticker as ticker
+
 # ------------------------------
 # Global numerical knobs / floors
 # ------------------------------
@@ -162,11 +164,12 @@ def _check_numerical_stability(array: torch.Tensor, name: str, context: str) -> 
     RpACalculationError
         If numerical instability detected
     """
-    if torch.isnan(array).any():
-        raise RpACalculationError(f"NaN detected in {name} during {context}")
-    
-    if torch.isinf(array).any():
-        raise RpACalculationError(f"Inf detected in {name} during {context}")
+    if _HAS_TORCH:
+        if torch.isnan(array).any():
+            raise RpACalculationError(f"NaN detected in {name} during {context}")
+        
+        if torch.isinf(array).any():
+            raise RpACalculationError(f"Inf detected in {name} during {context}")
 
 
 # ----------------------------------------------------------------------
@@ -281,9 +284,11 @@ def _qp_device(qp) -> torch.device:
     """
     dev_str = getattr(qp, "device", None)
     if dev_str is None:
-        dev_str = "cuda" if (QF._HAS_TORCH and torch.cuda.is_available()) else "cpu"
+        dev_str = "cuda" if (_HAS_TORCH and torch.cuda.is_available()) else "cpu"
     if dev_str == "cuda" and not torch.cuda.is_available():
         dev_str = "cpu"
+    if not _HAS_TORCH:
+        return dev_str # Return string if torch not available
     return torch.device(dev_str)
 
 
@@ -1460,6 +1465,7 @@ def rpa_band_vs_pT_eloss(
     mb_c0: float = 0.25,
     mb_weights_custom: Dict[str, float] | None = None,
     kind: Literal["pA", "AA"] = "pA",
+    table_for_pp=None,
 ):
     assert component in ("loss", "eloss_broad")
 
@@ -1473,7 +1479,7 @@ def rpa_band_vs_pT_eloss(
         pT_edges, y_range,
         components=(component,),
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
-        table_for_pp=None,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind,
         weight_ref_y=weight_ref_y,
         mb_weight_mode=mb_weight_mode,
@@ -1487,7 +1493,7 @@ def rpa_band_vs_pT_eloss(
         pT_edges, y_range,
         components=(component,),
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
-        table_for_pp=None,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind,
         weight_ref_y=weight_ref_y,
         mb_weight_mode=mb_weight_mode,
@@ -1520,6 +1526,7 @@ def rpa_band_vs_pT_broad(
     mb_weight_mode: Literal["exp", "optical", "custom"] = "exp",
     mb_c0: float = 0.25,
     mb_weights_custom: Dict[str, float] | None = None,
+    table_for_pp=None,
     kind: Literal["pA", "AA"] = "pA",
 ):
     assert component in ("broad", "eloss_broad")
@@ -1533,7 +1540,7 @@ def rpa_band_vs_pT_broad(
         pT_edges, y_range,
         components=(component,),
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
-        table_for_pp=None,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind,
         weight_ref_y=weight_ref_y,
         mb_c0=mb_c0,
@@ -1546,7 +1553,7 @@ def rpa_band_vs_pT_broad(
         pT_edges, y_range,
         components=(component,),
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
-        table_for_pp=None,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind,
         weight_ref_y=weight_ref_y,
         mb_c0=mb_c0,
@@ -1578,6 +1585,7 @@ def rpa_band_vs_pT(
     weight_ref_y: float | str = "local",
     mb_weight_mode: Literal["exp", "optical", "custom"] = "exp",
     mb_c0: float = 0.25,
+    table_for_pp=None,
     mb_weights_custom: Dict[str, float] | None = None,
     kind: Literal["pA", "AA"] = "pA",
 ):
@@ -1650,6 +1658,7 @@ def rpa_band_vs_centrality(
     weight_ref_y: float | str = "local",
     mb_weight_mode: Literal["exp", "optical", "custom"] = "exp",
     mb_c0: float = 0.25,
+    table_for_pp=None,
     mb_weights_custom: Dict[str, float] | None = None,
     kind: Literal["pA", "AA"] = "pA",
 ):
@@ -1678,6 +1687,7 @@ def rpa_band_vs_centrality(
             y_range, pt_range,
             component="loss",
             Ny_bin=Ny_bin, Npt_bin=Npt_bin,
+            table_for_pp=table_for_pp,
             weight_kind=weight_kind,
             weight_ref_y=weight_ref_y,
             mb_weight_mode=mb_weight_mode,
@@ -1694,6 +1704,7 @@ def rpa_band_vs_centrality(
         y_range, pt_range,
         component="loss",
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind, weight_ref_y=weight_ref_y,
         mb_weight_mode=mb_weight_mode, mb_c0=mb_c0, mb_weights_custom=mb_weights_custom,
         kind=kind,
@@ -1716,6 +1727,7 @@ def rpa_band_vs_centrality(
             y_range, pt_range,
             component="broad",
             Ny_bin=Ny_bin, Npt_bin=Npt_bin,
+            table_for_pp=table_for_pp,
             weight_kind=weight_kind,
             weight_ref_y=weight_ref_y,
             mb_weight_mode=mb_weight_mode,
@@ -1732,6 +1744,7 @@ def rpa_band_vs_centrality(
         y_range, pt_range,
         component="broad",
         Ny_bin=Ny_bin, Npt_bin=Npt_bin,
+        table_for_pp=table_for_pp,
         weight_kind=weight_kind, weight_ref_y=weight_ref_y,
         mb_weight_mode=mb_weight_mode, mb_c0=mb_c0, mb_weights_custom=mb_weights_custom,
         kind=kind,
@@ -1878,6 +1891,7 @@ def plot_RpA_vs_y_components_per_centrality(
     mb_c0: float = 0.25,
     mb_weights_custom: Dict[str, float] | None = None,
     extra_bands: Dict[str, Tuple[Dict, Dict, Dict]] | None = None,
+    table_for_pp=None,
 ):
     """
     Make a grid of subplots, one per centrality bin (+ optional MB),
@@ -2042,8 +2056,8 @@ def plot_RpA_vs_y_components_per_centrality(
 
         if hasattr(ax, "tick_params"):
             ax.tick_params(direction="in", top=True, right=True, which="both")
-            ax.xaxis.set_minor_locator(plt.AutoMinorLocator())
-            ax.yaxis.set_minor_locator(plt.AutoMinorLocator())
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+            ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     # Consistency
     for ax in axes:
@@ -2079,6 +2093,7 @@ def plot_RpA_vs_pT_components_per_centrality(
     mb_weight_mode: Literal["exp", "optical", "custom"] = "exp",
     mb_c0: float = 0.25,
     mb_weights_custom: Dict[str, float] | None = None,
+    table_for_pp=None,
     extra_bands: Dict[str, Tuple[Dict, Dict, Dict]] | None = None,
 ):
     """
@@ -2117,6 +2132,7 @@ def plot_RpA_vs_pT_components_per_centrality(
             weight_kind=weight_kind,
             weight_ref_y=weight_ref_y,
             mb_weight_mode=mb_weight_mode,
+            table_for_pp=table_for_pp,
             mb_c0=mb_c0,
             mb_weights_custom=mb_weights_custom,
         )
@@ -2249,8 +2265,8 @@ def plot_RpA_vs_pT_components_per_centrality(
 
         if hasattr(ax, "tick_params"):
             ax.tick_params(direction="in", top=True, right=True, which="both")
-            ax.xaxis.set_minor_locator(plt.AutoMinorLocator())
-            ax.yaxis.set_minor_locator(plt.AutoMinorLocator())
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+            ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     # Remove any unused axes
     for j in range(n_panels, len(axes)):
@@ -2410,8 +2426,8 @@ def plot_RpA_vs_centrality_components_band(
     
     # After plotting everything:
     ax.tick_params(direction="in", top=True, right=True, which="both")
-    ax.xaxis.set_minor_locator(plt.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(plt.AutoMinorLocator())
+    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
     ax.legend(frameon=False, fontsize=9, loc="lower left")
 
     if note is not None:

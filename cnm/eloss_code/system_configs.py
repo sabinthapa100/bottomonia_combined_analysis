@@ -154,8 +154,8 @@ class OOConfig:
     # Centrality — fewer bins for light ion
     cent_bins = [(0, 10), (10, 20), (20, 40), (40, 60), (60, 100)]
     # Rapidities for CMS OO (@ LHC) 
-    # Mid: |y| < 2.4, Back: -5 to -2.4, Fwd: 2.0 to 4.5
-    rapidity_windows = [(-2.4, 2.4), (-5.0, -2.4), (2.0, 4.5)]
+    # Mid: |y| < 2.4, Forward: 2.5 to 4.0, Backward: -5.0 to -2.5
+    rapidity_windows = [(-2.4, 2.4), (2.5, 4.0), (-5.0, -2.5)]
 
     # Execution
     pt_range_integrated = (0.0, 10.0)
