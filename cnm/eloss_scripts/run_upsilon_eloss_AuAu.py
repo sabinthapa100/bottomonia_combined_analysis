@@ -1,15 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-run_upsilon_eloss_pPb.py
+run_upsilon_eloss_OO.py
 ========================
-Standalone p-Pb Upsilon production script integrating:
+Standalone O-O Upsilon production script integrating:
 Energy Loss + pT Broadening (EXCLUDING nPDF).
 
 Matches publication style: outputs categorized into min_bias/ and centrality/.
 """
-import sys, os
+
 from pathlib import Path
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib
@@ -32,27 +33,39 @@ for d in reversed(paths_to_add):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from cnm_combine_fast_nuclabs import CNMCombineFast
+from npdf_OO_data import load_OO_dat, build_OO_rpa_grid
 from glauber import OpticalGlauber, SystemSpec
+from gluon_ratio import GluonEPPSProvider, EPPS21Ratio
+from npdf_centrality import compute_df49_by_centrality
 from particle import Particle
 from coupling import alpha_s_provider
 import quenching_fast as QF
+from cnm_combine_fast_nuclabs import CNMCombineFast
 
-# ── Physics config ──────────────────────────────────────────────────
-M_UPSILON_AVG = 10.01
-SQRTS_GEV = {"5.02": 5023.0, "8.16": 8160.0}
-SIG_NN_MB = {"5.02": 67.0,   "8.16": 71.0}
+# ── Config ───────────────────────────────────────────────────────────
+ENERGIES = ["5.36"]
+SQRTS_GEV = {"5.36": 5360.0}
+SIG_NN_MB = {"5.36": 68.0}
+M_UPSILON = 9.46
+M_UPSILON_AVG = 10.01  # For nPDF matching
+
+# OUTPUT PATHS
+OUTDIR_CENT = ROOT / "outputs" / "eloss" / "centrality" / "OO_5p36TeV"
+OUTDIR_MB   = ROOT / "outputs" / "eloss" / "min_bias" / "OO_5p36TeV"
 
 DPI = 150
-ALPHA_BAND = 0.20
+ALPHA_BAND = 0.22
 
-# ── Global Plot Settings ─────────────────────────────────────────────
-Y_LIM_RPA = (0.65, 1.1)
-X_LIM_PT = (0, 20.0)
+# PLOTTING LIMITS
+Y_LIMITS_RPA = (0.65, 1.1)
+X_LIMIT_PT = (0, 20)
+
+CALC_COMPS = ("eloss", "broad", "eloss_broad")
+COMPONENTS_TO_PLOT = ["eloss", "broad", "eloss_broad"]
 
 COLORS = {
-    'eloss':      '#F4A0A0',   # pink/salmon
-    'broad':      '#56B4E9',   # light blue
+    "eloss":      "#F4A0A0",   # pink/salmon
+    "broad":      "#56B4E9",   # light blue
     "eloss_broad":"#000000",   # black
 }
 
@@ -62,60 +75,74 @@ LABELS = {
     "eloss_broad":r"ELoss + $p_T$-Broad",
 }
 
-CALC_COMPS = ["eloss", "broad", "eloss_broad"]
-COMPONENTS_TO_PLOT = ["eloss", "broad", "eloss_broad"]
+CENT_BINS = [(0,20),(20,40),(40,60),(60,80),(80,100)]
+MB_C0 = 0.25
 
-CENT_BINS = [(0,10),(10,20),(20,40),(40,60),(60,80),(80,100)]
-Y_EDGES = np.arange(-5.5, 5.0 + 0.5, 0.5)
+Y_EDGES = np.arange(-5.0, 5.0 + 0.5, 0.5)
 P_EDGES = np.arange(0.0, 20.0 + 1.0, 1.0)
 PT_RANGE_AVG = (0.0, 20.0)
 
 Y_WINDOWS = [
-    (-4.46, -2.96, r"$-4.46 < y < -2.96$"),
-    (-1.37,  0.43, r"$-1.37 < y < 0.43$"),
-    ( 2.03,  3.53, r"$2.03 < y < 3.53$"),
+    (-4.5, -2.5, r"$-4.5 < y < -2.5$"),
+    (-2.4,  2.4, r"$-2.4 < y < 2.4$"),
+    ( 2.5,  4.0, r"$2.5 < y < 4.0$"),
 ]
 
 Q0_PAIR = (0.05, 0.09)
 P0_SCALE_PAIR = (0.9, 1.1)
 
-def build_eloss_context(energy):
-    print(f"\n[INFO] Loading p+Pb @ {energy} TeV (ELoss Only)...", flush=True)
+# ── Factory ──────────────────────────────────────────────────────────
+def build_eloss_context(energy="5.36"):
+    print(f"\n[INFO] Loading O+O @ {energy} TeV (ELoss Only, but with nPDF context)...", flush=True)
+    SQRT_SNN = SQRTS_GEV[energy]
+    SIG_NN = SIG_NN_MB[energy]
     
-    sqrt_sNN = SQRTS_GEV[energy]
-    sigma_nn_mb = SIG_NN_MB[energy]
+    # Build nPDF context (needed for cnm_vs_y to work, even though we only plot eloss/broad)
+    OO_DAT = ROOT / "inputs" / "npdf" / "OxygenOxygen5360" / "nPDF_OO.dat"
+    data = load_OO_dat(str(OO_DAT))
+    grid = build_OO_rpa_grid(data, pt_max=20.0)
     
-    # Glauber geometry
-    gl_spec = SystemSpec("pA", sqrt_sNN, A=208, sigma_nn_mb=sigma_nn_mb)
-    gl = OpticalGlauber(gl_spec, nx_pa=64, ny_pa=64, verbose=False)
+    gl = OpticalGlauber(SystemSpec("AA", SQRT_SNN, A=16, sigma_nn_mb=SIG_NN), nx_pa=64, ny_pa=64, verbose=False)
     
-    # Quenching params
-    alpha_s = alpha_s_provider(mode="running", LambdaQCD=0.25)
-    Lmb = gl.leff_minbias_pA()
-    device = "cpu"
-    qp_base = QF.QuenchParams(
-        qhat0=0.075, lp_fm=1.5, LA_fm=Lmb, LB_fm=Lmb,
-        system="pA", lambdaQCD=0.25, roots_GeV=sqrt_sNN,
-        alpha_of_mu=alpha_s, alpha_scale="mT",
-        use_hard_cronin=True, mapping="exp", device=device,
+    r0 = grid["r_central"].to_numpy()
+    M = grid[[f"r_mem_{i:03d}" for i in range(1, 49)]].to_numpy().T
+    SA_all = np.vstack([r0[None, :], M])
+    
+    epps_wrapper = EPPS21Ratio(A=16, path=str(ROOT / "inputs" / "npdf" / "nPDFs"))
+    gluon_provider = GluonEPPSProvider(epps_wrapper, SQRT_SNN, m_state_GeV=M_UPSILON_AVG)
+    
+    df49_by_cent, K_by_cent, _, Y_SHIFT = compute_df49_by_centrality(
+        grid, r0, M, gluon_provider, gl,
+        cent_bins=CENT_BINS, nb_bsamples=5, kind="AA", SA_all=SA_all
     )
     
-    # Build CNM combiner with NPDF disabled
+    npdf_ctx = dict(df49_by_cent=df49_by_cent, df_pp=grid, df_pa=grid, gluon=gluon_provider)
+    particle = Particle(family="bottomonia", state="avg", mass_override_GeV=M_UPSILON)
+    alpha_s = alpha_s_provider(mode="running", LambdaQCD=0.25)
+    Lmb = gl.leff_minbias_AA()
+    
+    device = "cpu"
+    qp_base = QF.QuenchParams(
+        qhat0=0.075, lp_fm=1.5,
+        LA_fm=Lmb, LB_fm=Lmb,
+        system="AA", lambdaQCD=0.25, roots_GeV=SQRT_SNN,
+        alpha_of_mu=alpha_s, alpha_scale="mT",
+        use_hard_cronin=True, mapping="exp", device=device
+    )
+    
     cnm = CNMCombineFast(
         energy=energy, family="bottomonia", particle_state="avg",
-        sqrt_sNN=sqrt_sNN, sigma_nn_mb=sigma_nn_mb,
+        sqrt_sNN=SQRT_SNN, sigma_nn_mb=SIG_NN,
         cent_bins=CENT_BINS, y_edges=Y_EDGES, p_edges=P_EDGES,
         y_windows=Y_WINDOWS, pt_range_avg=PT_RANGE_AVG, pt_floor_w=1.0,
-        weight_mode="flat", y_ref=0.0, cent_c0=0.25,
+        weight_mode="flat", y_ref=0.0, cent_c0=MB_C0,
         q0_pair=Q0_PAIR, p0_scale_pair=P0_SCALE_PAIR, nb_bsamples=5,
-        y_shift_fraction=1.0,
-        particle=Particle(family="bottomonia", state="avg", mass_override_GeV=9.46),
-        npdf_ctx=None,  # DISABLED EXPLICITLY
-        gl=gl, qp_base=qp_base, spec=gl_spec
+        y_shift_fraction=1.0, particle=particle,
+        npdf_ctx=npdf_ctx, gl=gl, qp_base=qp_base, spec=gl.spec
     )
     return cnm
 
-# ── Helpers ─────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────
 def step_from_centers(xc, vals):
     xc = np.asarray(xc, float); vals = np.asarray(vals, float)
     dx = np.diff(xc)
@@ -126,7 +153,7 @@ def step_from_centers(xc, vals):
 
 def cent_step_arrays(cb, vals):
     vals = np.asarray(vals, float)
-    edges = [cb[0][0]] + [b for (_,b) in cb]
+    edges = [cb[0][0]] + [b for (_, b) in cb]
     return np.asarray(edges, float), np.concatenate([vals, vals[-1:]])
 
 # ── CSV savers ──────────────────────────────────────────────────────
@@ -137,7 +164,7 @@ def save_csv_y(outdir, yc, bands_all, tags, energy, suffix=""):
             Rc, Rlo, Rhi = Rc_dict[tag], Rlo_dict[tag], Rhi_dict[tag]
             df = pd.DataFrame({"y_center": yc, "R_central": Rc, "R_lo": Rlo, "R_hi": Rhi})
             st = tag.replace("%","pct").replace(" ","")
-            df.to_csv(outdir / f"Upsilon_RpA_ELoss_{comp}_vs_y_{st}_{energy.replace('.','p')}TeV{suffix}.csv", index=False)
+            df.to_csv(outdir / f"Upsilon_RAA_ELoss_{comp}_vs_y_{st}_OO_{energy.replace('.','p')}TeV{suffix}.csv", index=False)
 
 def save_csv_pT(outdir, pc, bands_all, tags, energy, yname=""):
     for comp, (Rc_dict, Rlo_dict, Rhi_dict) in bands_all.items():
@@ -146,7 +173,7 @@ def save_csv_pT(outdir, pc, bands_all, tags, energy, yname=""):
             df = pd.DataFrame({"pT_center": pc, "R_central": Rc, "R_lo": Rlo, "R_hi": Rhi})
             st = tag.replace("%","pct").replace(" ","")
             yn = yname.replace(" ","").replace("<","").replace(">","").replace("$","").replace("\\","")
-            df.to_csv(outdir / f"Upsilon_RpA_ELoss_{comp}_vs_pT_{st}_{yn}_{energy.replace('.','p')}TeV.csv", index=False)
+            df.to_csv(outdir / f"Upsilon_RAA_ELoss_{comp}_vs_pT_{st}_{yn}_OO_{energy.replace('.','p')}TeV.csv", index=False)
 
 def save_csv_cent(outdir, cnm, bands_cent, yname, energy):
     # bands_cent: {comp: (Rc, Rlo, Rhi, mbc, mblo, mbhi)}
@@ -154,8 +181,8 @@ def save_csv_cent(outdir, cnm, bands_cent, yname, energy):
     
     # Ncoll is same for all components
     gl = cnm.gl
-    Ncoll_cent = [gl.ncoll_mean_bin_pA_optical(a/100.0, b/100.0) for (a,b) in cnm.cent_bins]
-    Ncoll_MB = gl.ncoll_mean_bin_pA_optical(0.0, 1.0)
+    Ncoll_cent = [gl.ncoll_mean_bin_AA_optical(a/100.0, b/100.0) for (a,b) in cnm.cent_bins]
+    Ncoll_MB = gl.ncoll_mean_bin_AA_optical(0.0, 1.0)
 
     for comp, (Rc, Rlo, Rhi, mbc, mblo, mbhi) in bands_cent.items():
         rows = []
@@ -169,9 +196,9 @@ def save_csv_cent(outdir, cnm, bands_cent, yname, energy):
         
         yn = yname.replace(" ","").replace("<","").replace(">","").replace("$","").replace("\\","")
         pd.DataFrame(rows).to_csv(
-            outdir / f"Upsilon_RpA_ELoss_{comp}_vs_cent_{yn}_{energy.replace('.','p')}TeV.csv", index=False)
+            outdir / f"Upsilon_RAA_ELoss_{comp}_vs_cent_{yn}_OO_{energy.replace('.','p')}TeV.csv", index=False)
 
-# ── Plotting ────────────────────────────────────────────────────────
+# ── Core Plotting ────────────────────────────────────────────────────
 def plot_rpa_vs_y_grid(cnm, yc, tags, bands, energy):
     n_tags = len(tags)
     n_cols = 4
@@ -180,8 +207,9 @@ def plot_rpa_vs_y_grid(cnm, yc, tags, bands, energy):
     plt.subplots_adjust(hspace=0, wspace=0)
     axes_flat = axes.flatten()
 
-    sys_note = rf"$\mathbf{{p+Pb @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (ELoss Only)"
+    sys_note = rf"$\mathbf{{O+O @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$"
 
+    any_plotted = False
     for ip, tag in enumerate(tags):
         ax = axes_flat[ip]
         plotted_handles = []
@@ -194,21 +222,27 @@ def plot_rpa_vs_y_grid(cnm, yc, tags, bands, energy):
             line, = ax.step(xe, yc_s, where="post", lw=1.8, ls=ls, color=color, label=LABELS.get(comp, comp))
             ax.fill_between(xe, step_from_centers(yc, Rlo)[1], step_from_centers(yc, Rhi)[1], step="post", color=color, alpha=ALPHA_BAND, lw=0)
             if ip == 0: plotted_handles.append(line)
+            any_plotted = True
 
         ax.axhline(1.0, color="gray", ls=":", lw=0.8)
-        ax.text(0.96, 0.94, tag, transform=ax.transAxes, ha="right", va="top", weight="bold", fontsize=11)
-        if ip == 1: ax.text(0.05, 0.90, sys_note, transform=ax.transAxes, ha="left", va="top", fontsize=10)
+        ax.text(0.96, 0.96, tag, transform=ax.transAxes, ha="right", va="top", weight="bold", fontsize=11)
+        if ip == 0:
+            ax.text(0.20, 0.10, "ELoss Only", transform=ax.transAxes, color="red", weight="bold")
+        if ip == 1:
+            ax.text(0.05, 0.90, sys_note, transform=ax.transAxes, ha="left", va="top", fontsize=10)
 
-        ax.set_xlim(-5, 5); ax.set_ylim(*Y_LIM_RPA)
+        ax.set_xlim(-5, 5); ax.set_ylim(0.4, 1.2)
         ax.xaxis.set_major_locator(ticker.MaxNLocator(prune="both"))
+        ax.yaxis.set_major_locator(ticker.MaxNLocator(prune="both"))
         ax.tick_params(which="both", direction="in", top=True, right=True, labelsize=11)
         ax.label_outer()
 
     if n_tags < len(axes_flat):
          axes_flat[n_tags-1].legend(handles=plotted_handles, loc="lower center", frameon=False, fontsize=10)
+    
     for j in range(n_tags, len(axes_flat)): fig.delaxes(axes_flat[j])
     fig.text(0.5, 0.02, r"$y$", ha="center", fontsize=18)
-    fig.text(0.04, 0.5, r"$R^{\Upsilon}_{pA}$ (ELoss Only)", va="center", rotation="vertical", fontsize=18)
+    fig.text(0.04, 0.5, r"$R^{\Upsilon}_{AA}$ (ELoss Only)", va="center", rotation="vertical", fontsize=18)
     return fig
 
 def plot_rpa_vs_pT_grid(cnm, energy, y_windows, p_edges):
@@ -217,7 +251,7 @@ def plot_rpa_vs_pT_grid(cnm, energy, y_windows, p_edges):
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(18, 3.0*n_rows), sharex=True, sharey=True, dpi=DPI)
     plt.subplots_adjust(hspace=0, wspace=0)
 
-    sys_note = rf"$\mathbf{{p+Pb @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (ELoss Only)"
+    sys_note = rf"$\mathbf{{O+O @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (ELoss Only)"
 
     for row, (y0,y1,yname) in enumerate(y_windows):
         pc, tags_pt, bands_pt = cnm.cnm_vs_pT((y0,y1), p_edges, components=CALC_COMPS, include_mb=True)
@@ -236,13 +270,13 @@ def plot_rpa_vs_pT_grid(cnm, energy, y_windows, p_edges):
             ax.text(0.96, 0.94, tag, transform=ax.transAxes, ha="right", va="top", weight="bold", fontsize=10)
             ax.text(0.04, 0.94, yname, transform=ax.transAxes, ha="left", va="top", color="navy", fontsize=9, fontweight="bold")
             if row == 0 and col == 0: ax.text(0.05, 0.10, sys_note, transform=ax.transAxes, ha="left", va="bottom", fontsize=8.5)
-            ax.set_xlim(*X_LIM_PT); ax.set_ylim(*Y_LIM_RPA)
+            ax.set_xlim(*X_LIMIT_PT); ax.set_ylim(*Y_LIMITS_RPA)
             ax.tick_params(axis="both", which="both", direction="in", top=True, right=True, labelsize=10)
             ax.label_outer()
             if row == 0 and col == 1: ax.legend(loc="lower left", frameon=False, fontsize=8)
 
     fig.text(0.5, 0.02, r"$p_T$ (GeV)", ha="center", fontsize=20)
-    fig.text(0.04, 0.5, r"$R^{\Upsilon}_{pA}$ (ELoss Only)", va="center", rotation="vertical", fontsize=20)
+    fig.text(0.04, 0.5, r"$R^{\Upsilon}_{AA}$ (ELoss Only)", va="center", rotation="vertical", fontsize=20)
     return fig
 
 def plot_rpa_vs_centrality(cnm, energy, y_windows, pt_range_avg):
@@ -260,15 +294,15 @@ def plot_rpa_vs_centrality(cnm, energy, y_windows, pt_range_avg):
             xe, yc_s = cent_step_arrays(cnm.cent_bins, Rc)
             ax.step(xe, yc_s, where="post", lw=1.8, ls=ls, color=color, label=LABELS.get(comp, comp))
             ax.fill_between(xe, cent_step_arrays(cnm.cent_bins, Rlo)[1], cent_step_arrays(cnm.cent_bins, Rhi)[1], step="post", color=color, alpha=0.15, lw=0)
-            ax.hlines(mbc, 0, 100, colors=color, linestyles=":", linewidth=1.2)
+            ax.hlines(mbc, 0, 100, colors=color, linestyles=":", linewidth=1.5)
 
         ax.text(0.92, 0.94, yname, transform=ax.transAxes, ha="right", va="top", fontsize=11, color="navy", fontweight="bold")
         if i == 1: ax.legend(loc="lower left", frameon=False, fontsize=10)
-        ax.set_xlim(0, 100); ax.set_ylim(*Y_LIM_RPA)
+        ax.set_xlim(0, 100); ax.set_ylim(0.4, 1.2)
         ax.set_xlabel("Centrality [%]", fontsize=14)
         ax.tick_params(which="both", direction="in", top=True, right=True)
         ax.axhline(1.0, color="k", ls="-", lw=1.0)
-        if i == 0: ax.set_ylabel(r"$R^{\Upsilon}_{pA}$ (ELoss Only)", fontsize=16)
+        if i == 0: ax.set_ylabel(r"$R^{\Upsilon}_{AA}$ (ELoss Only)", fontsize=16)
 
     fig.tight_layout()
     return fig
@@ -277,76 +311,85 @@ def plot_rpa_vs_centrality(cnm, energy, y_windows, pt_range_avg):
 def run_energy(energy):
     cnm = build_eloss_context(energy)
     etag = energy.replace('.','p')
+    OUTDIR_CENT.mkdir(parents=True, exist_ok=True)
+    OUTDIR_MB.mkdir(parents=True, exist_ok=True)
     
-    OUTDIR_CENT = ROOT / "outputs" / "eloss" / "centrality" / f"pPb_{etag}TeV"
-    OUTDIR_MB   = ROOT / "outputs" / "eloss" / "min_bias" / f"pPb_{etag}TeV"
-    OUTDIR_CENT.mkdir(exist_ok=True, parents=True)
-    OUTDIR_MB.mkdir(exist_ok=True, parents=True)
-
-    print(f"  [PLOT] R_pA vs y (ELoss Only) ...", flush=True)
+    print(f"  [PLOT] R_AA vs y (ELoss Only) ...", flush=True)
     yc, tags_y, bands_y = cnm.cnm_vs_y(y_edges=Y_EDGES, pt_range_avg=PT_RANGE_AVG, components=CALC_COMPS, include_mb=True)
     fig_y = plot_rpa_vs_y_grid(cnm, yc, tags_y, bands_y, energy)
-    fig_y.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_y_{etag}TeV_Grid.pdf", bbox_inches="tight")
-    fig_y.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_y_{etag}TeV_Grid.png", dpi=DPI, bbox_inches="tight")
+    fig_y.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_y_OO_{etag}TeV_Grid.pdf", bbox_inches="tight")
+    fig_y.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_y_OO_{etag}TeV_Grid.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig_y)
     save_csv_y(OUTDIR_CENT, yc, bands_y, tags_y, energy)
-
-    # MB y
+    
+    # MB R_AA vs y (Subfigure style)
     fig_mb_y, ax_mb_y = plt.subplots(figsize=(8,6), dpi=DPI)
     for comp in COMPONENTS_TO_PLOT:
         if comp not in bands_y: continue
         Rc = bands_y[comp][0]["MB"]
         xe, yc_s = step_from_centers(yc, Rc)
+        color = "black" if comp == "eloss_broad" else COLORS[comp]
         ls = "--" if comp == "eloss_broad" else "-"
-        ax_mb_y.step(xe, yc_s, where="post", lw=2.2, ls=ls, color=COLORS[comp], label=LABELS[comp])
-        ax_mb_y.fill_between(xe, step_from_centers(yc, bands_y[comp][1]["MB"])[1], step_from_centers(yc, bands_y[comp][2]["MB"])[1], step="post", color=COLORS[comp], alpha=0.1, lw=0)
-    ax_mb_y.set_xlim(-5, 5); ax_mb_y.set_ylim(*Y_LIM_RPA); ax_mb_y.axhline(1.0, color="k", ls="-", lw=0.8)
-    ax_mb_y.set_xlabel(r"$y$", fontsize=14); ax_mb_y.set_ylabel(r"$R^{\Upsilon}_{pA}$ (ELoss Only)", fontsize=14)
+        ax_mb_y.step(xe, yc_s, where="post", lw=2.4, ls=ls, color=color, label=LABELS[comp])
+        ax_mb_y.fill_between(xe, step_from_centers(yc, bands_y[comp][1]["MB"])[1], step_from_centers(yc, bands_y[comp][2]["MB"])[1], step="post", color=color, alpha=0.1, lw=0)
+    ax_mb_y.set_xlim(-5, 5); ax_mb_y.set_ylim(*Y_LIMITS_RPA); ax_mb_y.axhline(1.0, color="k", ls="-", lw=0.8)
+    ax_mb_y.set_xlabel(r"$y$", fontsize=14); ax_mb_y.set_ylabel(r"$R^{\Upsilon}_{AA}$ (ELoss Only)", fontsize=14)
     ax_mb_y.legend(loc="lower right", frameon=False, fontsize=11)
-    ax_mb_y.text(0.05, 0.95, rf"$\mathbf{{p+Pb @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (Min. Bias)", transform=ax_mb_y.transAxes, ha="left", va="top", fontsize=12)
-    fig_mb_y.savefig(OUTDIR_MB / f"Upsilon_RpA_ELossOnly_vs_y_MB_{etag}TeV.pdf", bbox_inches="tight")
-    fig_mb_y.savefig(OUTDIR_MB / f"Upsilon_RpA_ELossOnly_vs_y_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    ax_mb_y.text(0.05, 0.95, rf"$\mathbf{{O+O @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (Min. Bias)", transform=ax_mb_y.transAxes, ha="left", va="top", fontsize=12)
+    fig_mb_y.savefig(OUTDIR_MB / f"Upsilon_RAA_ELossOnly_vs_y_MB_OO_{etag}TeV.pdf", bbox_inches="tight")
+    fig_mb_y.savefig(OUTDIR_MB / f"Upsilon_RAA_ELossOnly_vs_y_MB_OO_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig_mb_y)
-
-    print(f"  [PLOT] R_pA vs pT (ELoss Only) ...", flush=True)
+    
+    print(f"  [PLOT] R_AA vs pT (ELoss Only) ...", flush=True)
     fig_pt = plot_rpa_vs_pT_grid(cnm, energy, Y_WINDOWS, P_EDGES)
-    fig_pt.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_pT_Grid_{etag}TeV.pdf", bbox_inches="tight")
-    fig_pt.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_pT_Grid_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    fig_pt.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_pT_Grid_OO_{etag}TeV.pdf", bbox_inches="tight")
+    fig_pt.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_pT_Grid_OO_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig_pt)
 
     for row, (y0,y1,yname) in enumerate(Y_WINDOWS):
         pc, tags_pt, bands_pt = cnm.cnm_vs_pT((y0,y1), P_EDGES, components=CALC_COMPS, include_mb=True)
         save_csv_pT(OUTDIR_CENT, pc, bands_pt, tags_pt, energy, yname)
     
-    # MB pT (middle window)
-    y0_mb, y1_mb, yname_mb = Y_WINDOWS[1]
-    pc_mb, tags_pt_mb, bands_pt_mb = cnm.cnm_vs_pT((y0_mb, y1_mb), P_EDGES, components=CALC_COMPS, include_mb=True)
-    fig_mb_pt, ax_mb_pt = plt.subplots(figsize=(8,6), dpi=DPI)
-    for comp in COMPONENTS_TO_PLOT:
-        if comp not in bands_pt_mb: continue
-        Rc_mb = bands_pt_mb[comp][0]["MB"]
-        xe, yc_s = step_from_centers(pc_mb, Rc_mb)
-        ls = "--" if comp == "eloss_broad" else "-"
-        ax_mb_pt.step(xe, yc_s, where="post", lw=2.4, ls=ls, color=COLORS[comp], label=LABELS[comp])
-        ax_mb_pt.fill_between(xe, step_from_centers(pc_mb, bands_pt_mb[comp][1]["MB"])[1], step_from_centers(pc_mb, bands_pt_mb[comp][2]["MB"])[1], step="post", color=COLORS[comp], alpha=0.1, lw=0)
-    ax_mb_pt.set_xlim(*X_LIM_PT); ax_mb_pt.set_ylim(*Y_LIM_RPA); ax_mb_pt.axhline(1.0, color="k", ls="-", lw=0.8)
-    ax_mb_pt.set_xlabel(r"$p_T$ (GeV)", fontsize=14); ax_mb_pt.set_ylabel(r"$R^{\Upsilon}_{pA}$ (ELoss Only)", fontsize=14)
-    ax_mb_pt.legend(loc="lower right", frameon=False, fontsize=11); ax_mb_pt.text(0.05, 0.95, rf"$\mathbf{{p+Pb @ \sqrt{{s_{{NN}}}} = {energy} TeV}}$ (Min. Bias)", transform=ax_mb_pt.transAxes, ha="left", va="top", fontsize=12)
-    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_ELossOnly_vs_pT_MB_{etag}TeV.pdf", bbox_inches="tight")
-    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RpA_ELossOnly_vs_pT_MB_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    # MB pT (multiple windows)
+    fig_mb_pt, axes_mb_pt = plt.subplots(1, 3, figsize=(15, 5), dpi=DPI, sharey=True)
+    plt.subplots_adjust(wspace=0)
+    for i, (y0, y1, yname) in enumerate(Y_WINDOWS):
+        ax = axes_mb_pt[i]
+        pc_mb, tags_pt_mb, bands_pt_mb = cnm.cnm_vs_pT((y0, y1), P_EDGES, components=CALC_COMPS, include_mb=True)
+        for comp in COMPONENTS_TO_PLOT:
+            if comp not in bands_pt_mb: continue
+            Rc_mb = bands_pt_mb[comp][0]["MB"]
+            xe, yc_s = step_from_centers(pc_mb, Rc_mb)
+            ls = "--" if comp == "eloss_broad" else "-"
+            ax.step(xe, yc_s, where="post", lw=2.4, ls=ls, color=COLORS[comp], label=LABELS[comp] if i==1 else None)
+            ax.fill_between(xe, step_from_centers(pc_mb, bands_pt_mb[comp][1]["MB"])[1], step_from_centers(pc_mb, bands_pt_mb[comp][2]["MB"])[1], step="post", color=COLORS[comp], alpha=0.1, lw=0)
+        
+        ax.axhline(1.0, color="k", ls="-", lw=0.8)
+        ax.set_xlim(*X_LIMIT_PT); ax.set_ylim(*Y_LIMITS_RPA)
+        ax.text(0.5, 0.92, yname, transform=ax.transAxes, ha="center", va="top", fontsize=11, color="navy", fontweight="bold")
+        ax.set_xlabel(r"$p_T$ (GeV)", fontsize=12)
+        if i == 0:
+            ax.set_ylabel(r"$R^{\Upsilon}_{AA}$ (ELoss Only)", fontsize=14)
+            ax.text(0.05, 0.05, rf"$\mathbf{{O+O @ {energy} TeV}}$"+"\nMin. Bias", transform=ax.transAxes, fontsize=10)
+    axes_mb_pt[1].legend(loc="lower right", frameon=False, fontsize=10)
+    fig_mb_pt.tight_layout()
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RAA_ELossOnly_vs_pT_MB_OO_{etag}TeV.pdf", bbox_inches="tight")
+    fig_mb_pt.savefig(OUTDIR_MB / f"Upsilon_RAA_ELossOnly_vs_pT_MB_OO_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
     plt.close(fig_mb_pt)
 
-    print(f"  [PLOT] R_pA vs centrality (ELoss Only) ...", flush=True)
-    fig_c = plot_rpa_vs_centrality(cnm, energy, Y_WINDOWS, PT_RANGE_AVG)
-    fig_c.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_centrality_{etag}TeV.pdf", bbox_inches="tight")
-    fig_c.savefig(OUTDIR_CENT / f"Upsilon_RpA_ELossOnly_vs_centrality_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
-    plt.close(fig_c)
+    print(f"  [PLOT] R_AA vs centrality (ELoss Only) ...", flush=True)
+    fig_C = plot_rpa_vs_centrality(cnm, energy, Y_WINDOWS, PT_RANGE_AVG)
+    fig_C.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_centrality_OO_{etag}TeV.pdf", bbox_inches="tight")
+    fig_C.savefig(OUTDIR_CENT / f"Upsilon_RAA_ELossOnly_vs_centrality_OO_{etag}TeV.png", dpi=DPI, bbox_inches="tight")
+    plt.close(fig_C)
     for y0, y1, yname in Y_WINDOWS:
         bands_cent = cnm.cnm_vs_centrality((y0,y1), PT_RANGE_AVG, components=CALC_COMPS)
         save_csv_cent(OUTDIR_CENT, cnm, bands_cent, yname, energy)
+    
+    print(f"  ✓ DONE (ELoss Only) — O+O @ {energy} TeV")
 
-    print(f"  ✓ DONE (ELoss Only) — p+Pb @ {energy} TeV\n", flush=True)
+def main():
+    for e in ENERGIES: run_energy(e)
 
 if __name__ == "__main__":
-    energies = sys.argv[1:] if len(sys.argv) > 1 else ["5.02", "8.16"]
-    for e in energies: run_energy(e)
+    main()

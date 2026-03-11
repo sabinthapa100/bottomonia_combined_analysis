@@ -118,6 +118,8 @@ def _apply_style():
         "font.family":      "DejaVu Sans",
         "xtick.labelsize":  11,
         "ytick.labelsize":  11,
+        "xtick.minor.visible": True,
+        "ytick.minor.visible": True,
         "lines.linewidth":  2.0,
         "figure.autolayout": True,
     })
@@ -152,6 +154,8 @@ def plot_rpa_vs_y_and_pt(
     # output
     save_dir: Optional[str] = None,
     tag: str = "primordial",
+    legend_loc: str = "best",
+    text_loc: Tuple[float, float] = (0.03, 0.97),
 ) -> None:
     """
     Create a 1×(1+N_pt_windows) figure for each entry in band_dict.
@@ -216,11 +220,12 @@ def plot_rpa_vs_y_and_pt(
         ax_y.set_ylabel(r"$R_{pA}$")
         ax_y.axhline(1.0, color="gray", lw=0.7, ls="--", alpha=0.5)
         ax_y.text(
-            0.03, 0.97,
+            text_loc[0], text_loc[1],
             rf"$p_T \in [{pt_window_for_y[0]:.0f},{pt_window_for_y[1]:.0f}]$ GeV",
-            transform=ax_y.transAxes, va="top", ha="left", fontsize=10,
+            transform=ax_y.transAxes, va="top" if text_loc[1] > 0.5 else "bottom", 
+            ha="left" if text_loc[0] < 0.5 else "right", fontsize=10,
         )
-        ax_y.legend(frameon=False, fontsize=9)
+        ax_y.legend(frameon=False, fontsize=9, loc=legend_loc)
 
         # ---- right panels: R_pA vs pT at each rapidity window ----
         for ki, yw in enumerate(y_windows_for_pt):
@@ -246,9 +251,10 @@ def plot_rpa_vs_y_and_pt(
             ax_pt.set_xlabel(r"$p_T$ [GeV]")
             ax_pt.axhline(1.0, color="gray", lw=0.7, ls="--", alpha=0.5)
             ax_pt.text(
-                0.03, 0.97,
+                text_loc[0], text_loc[1],
                 rf"${yw[0]:.1f} < y < {yw[1]:.1f}$",
-                transform=ax_pt.transAxes, va="top", ha="left", fontsize=10,
+                transform=ax_pt.transAxes, va="top" if text_loc[1] > 0.5 else "bottom",
+                ha="left" if text_loc[0] < 0.5 else "right", fontsize=10,
             )
 
         if suptitle:
@@ -284,6 +290,8 @@ def plot_rpa_comparison_vs_y(
     suptitle: str = "",
     save_dir: Optional[str] = None,
     tag: str = "comparison_vs_y",
+    legend_loc_model: str = "lower left",
+    legend_loc_state: str = "upper right",
 ) -> None:
     """
     Compare multiple band objects (e.g. NPWLC vs Pert) on the same R_pA(y) panel
@@ -338,9 +346,9 @@ def plot_rpa_comparison_vs_y(
         Line2D([0], [0], color=colors.get(s, "gray"), lw=2.0, label=l)
         for s, l in plot_states
     ]
-    first_legend  = ax.legend(handles=state_handles, loc="upper right", frameon=False, fontsize=9)
+    first_legend  = ax.legend(handles=state_handles, loc=legend_loc_state, frameon=False, fontsize=9)
     ax.add_artist(first_legend)
-    ax.legend(handles=model_handles, loc="lower left", frameon=False, fontsize=9)
+    ax.legend(handles=model_handles, loc=legend_loc_model, frameon=False, fontsize=9)
 
     ax.set_ylim(*ylim)
     if xlim_y:
@@ -379,6 +387,9 @@ def plot_rpa_vs_pt_three_windows(
     suptitle: str = "",
     save_dir: Optional[str] = None,
     tag: str = "rpa_pt_windows",
+    legend_loc_model: str = "lower left",
+    legend_loc_state: str = "upper right",
+    text_loc: Tuple[float, float] = (0.03, 0.97),
 ) -> None:
     """
     Create a 1×N_windows figure comparing multiple models (e.g. NPWLC and Pert)
@@ -429,9 +440,10 @@ def plot_rpa_vs_pt_three_windows(
             ax.set_ylabel(r"$R_{pA}$")
         ax.axhline(1.0, color="gray", lw=0.7, ls="--", alpha=0.5)
         ax.text(
-            0.03, 0.97,
+            text_loc[0], text_loc[1],
             rf"${yw[0]:.1f} < y < {yw[1]:.1f}$",
-            transform=ax.transAxes, va="top", ha="left", fontsize=10,
+            transform=ax.transAxes, va="top" if text_loc[1] > 0.5 else "bottom",
+            ha="left" if text_loc[0] < 0.5 else "right", fontsize=10,
         )
 
     # Combined legend on first panel
@@ -445,9 +457,9 @@ def plot_rpa_vs_pt_three_windows(
                label=ml)
         for i, ml in enumerate(entries.keys())
     ]
-    leg1 = ax0.legend(handles=state_handles, loc="upper right", frameon=False, fontsize=9)
+    leg1 = ax0.legend(handles=state_handles, loc=legend_loc_state, frameon=False, fontsize=9)
     ax0.add_artist(leg1)
-    ax0.legend(handles=model_handles, loc="lower left", frameon=False, fontsize=9)
+    ax0.legend(handles=model_handles, loc=legend_loc_model, frameon=False, fontsize=9)
 
     if suptitle:
         fig.suptitle(suptitle, fontsize=12, y=1.01)

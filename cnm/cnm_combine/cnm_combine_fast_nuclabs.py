@@ -396,6 +396,8 @@ def rpa_binned_batch_driver(
         L = Leff[c_idx]
         qpL = replace(qp_base, LA_fm=float(L), LB_fm=float(L))
         
+        is_AA = (getattr(qp_base, "system", "pA") == "AA")
+        
         # Calculate components
         # R_loss
         need_loss = any(k in components for k in ["loss", "eloss_broad"])
@@ -406,8 +408,17 @@ def rpa_binned_batch_driver(
         
         if need_loss:
             val_loss = R_pA_eloss_batch(P, roots_GeV, qpL, y_t, p_t, Ny_int=64, pp_override=pp_override, y_sign_for_xA=y_sign_for_xA)
+            if is_AA:
+                # Multiply by loss from the other nucleus (flipped rapidity)
+                val_loss_flipped = R_pA_eloss_batch(P, roots_GeV, qpL, -y_t, p_t, Ny_int=64, pp_override=pp_override, y_sign_for_xA=y_sign_for_xA)
+                val_loss = val_loss * val_loss_flipped
+
         if need_broad:
             val_broad = R_pA_broad_batch(P, roots_GeV, qpL, y_t, p_t, Nphi=64, pp_override=pp_override, y_sign_for_xA=y_sign_for_xA)
+            if is_AA:
+                # Multiply by broadening from the other nucleus (flipped rapidity)
+                val_broad_flipped = R_pA_broad_batch(P, roots_GeV, qpL, -y_t, p_t, Nphi=64, pp_override=pp_override, y_sign_for_xA=y_sign_for_xA)
+                val_broad = val_broad * val_broad_flipped
             
         for comp in components:
             if comp == "loss":

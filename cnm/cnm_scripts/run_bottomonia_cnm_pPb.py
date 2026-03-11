@@ -41,13 +41,13 @@ ALPHA_BAND = 0.20
 
 # ── Global Plot Settings ─────────────────────────────────────────────
 Y_LIM_RPA = (0.4, 1.2)
-X_LIM_PT = (0, 15)
+X_LIM_PT = (0, 20)
 
 COLORS = {
     'npdf':       '#E69F00',   # orange
     'eloss':      '#F4A0A0',   # pink/salmon
     'broad':      '#56B4E9',   # light blue
-    'eloss_broad':'#404040',   # dark gray
+    'eloss_broad':'#000000',   # black
     'cnm':        '#606060',   # Gray (Total CNM)
 }
 
@@ -65,7 +65,7 @@ COMPONENTS_TO_PLOT = ["npdf", "eloss", "broad", "eloss_broad", "cnm"]
 CENT_BINS = [(0,10),(10,20),(20,40),(40,60),(60,80),(80,100)]
 Y_EDGES = np.arange(-5.5, 5.0 + 0.5, 0.5)
 P_EDGES = np.arange(0.0, 20.0 + 1.0, 1.0) # More granular
-PT_RANGE_AVG = (0.0, 15.0)
+PT_RANGE_AVG = (0.0, 20.0)
 
 Y_WINDOWS = [
     (-4.46, -2.96, r"$-4.46 < y < -2.96$"),
@@ -158,7 +158,7 @@ def plot_rpa_vs_y_grid(cnm, yc, tags, bands, energy):
             Rc, Rlo, Rhi = bands[comp][0][tag], bands[comp][1][tag], bands[comp][2][tag]
             xe, yc_s = step_from_centers(yc, Rc)
             color = COLORS.get(comp, "black")
-            ls = "--" if comp == "npdf" else "-"
+            ls = "--" if comp in ("npdf", "eloss_broad") else "-"
             lw = 2.2 if comp == "cnm" else 1.5
             line, = ax.step(xe, yc_s, where="post", lw=lw, ls=ls, color=color, label=LABELS.get(comp, comp))
             ax.fill_between(xe, step_from_centers(yc, Rlo)[1], step_from_centers(yc, Rhi)[1], step="post", color=color, alpha=ALPHA_BAND, lw=0)
@@ -204,7 +204,7 @@ def plot_rpa_vs_pT_grid(cnm, energy, y_windows, p_edges):
                 Rc, Rlo, Rhi = bands_pt[comp][0][tag], bands_pt[comp][1][tag], bands_pt[comp][2][tag]
                 xe, yc_s = step_from_centers(pc, Rc)
                 color = COLORS.get(comp, "black")
-                ls = "--" if comp == "npdf" else "-"
+                ls = "--" if comp in ("npdf", "eloss_broad") else "-"
                 lw = 2.2 if comp == "cnm" else 1.5
                 ax.step(xe, yc_s, where="post", lw=lw, ls=ls, color=color, label=LABELS.get(comp, comp))
                 ax.fill_between(xe, step_from_centers(pc, Rlo)[1], step_from_centers(pc, Rhi)[1], step="post", color=color, alpha=ALPHA_BAND, lw=0)
@@ -241,7 +241,7 @@ def plot_rpa_vs_centrality(cnm, energy, y_windows, pt_range_avg):
             if comp not in bands_cent: continue
             Rc, Rlo, Rhi, mbc, mblo, mbhi = bands_cent[comp]
             color = COLORS.get(comp, "black")
-            ls = "-" if comp == "cnm" else "--" if comp == "npdf" else "-"
+            ls = "-" if comp == "cnm" else "--" if comp in ("npdf", "eloss_broad") else "-"
             lw = 2.0 if comp == "cnm" else 1.5
             
             xe, yc_s = cent_step_arrays(cnm.cent_bins, Rc)
@@ -294,7 +294,7 @@ def run_energy(energy):
         if comp not in bands_y: continue
         Rc_mb = bands_y[comp][0]["MB"]
         xe, yc_s = step_from_centers(yc, Rc_mb)
-        ls = "--" if comp == "npdf" else "-"
+        ls = "--" if comp in ("npdf", "eloss_broad") else "-"
         lw = 2.4 if comp == "cnm" else 1.8
         ax_mb.step(xe, yc_s, where="post", lw=lw, ls=ls, color=COLORS.get(comp, "black"), label=LABELS.get(comp, comp))
         ax_mb.fill_between(xe, step_from_centers(yc, bands_y[comp][1]["MB"])[1], step_from_centers(yc, bands_y[comp][2]["MB"])[1], step="post", color=COLORS.get(comp, "black"), alpha=0.1, lw=0)
@@ -327,7 +327,7 @@ def run_energy(energy):
         if comp not in bands_pt_mb: continue
         Rc_mb = bands_pt_mb[comp][0]["MB"]
         xe, yc_s = step_from_centers(pc_mb, Rc_mb)
-        ls = "--" if comp == "npdf" else "-"
+        ls = "--" if comp in ("npdf", "eloss_broad") else "-"
         lw = 2.4 if comp == "cnm" else 1.8
         ax_mb_pt.step(xe, yc_s, where="post", lw=lw, ls=ls, color=COLORS.get(comp, "black"), label=LABELS.get(comp, comp))
         ax_mb_pt.fill_between(xe, step_from_centers(pc_mb, bands_pt_mb[comp][1]["MB"])[1], step_from_centers(pc_mb, bands_pt_mb[comp][2]["MB"])[1], step="post", color=COLORS.get(comp, "black"), alpha=0.1, lw=0)

@@ -66,7 +66,7 @@ COMPONENTS_TO_PLOT = ["eloss", "broad", "eloss_broad"]
 COLORS = {
     "eloss":      "#F4A0A0",   # pink/salmon
     "broad":      "#56B4E9",   # light blue
-    "eloss_broad":"#404040",   # dark gray
+    "eloss_broad":"#000000",   # black
 }
 
 LABELS = {
@@ -80,10 +80,10 @@ MB_C0 = 0.25
 
 Y_EDGES = np.arange(-5.0, 5.0 + 0.5, 0.5)
 P_EDGES = np.arange(0.0, 20.0 + 1.0, 1.0)
-PT_RANGE_AVG = (0.0, 15.0)
+PT_RANGE_AVG = (0.0, 20.0)
 
 Y_WINDOWS = [
-    (-5.0, -2.5, r"$-5.0 < y < -2.5$"),
+    (-4.5, -2.5, r"$-4.5 < y < -2.5$"),
     (-2.4,  2.4, r"$-2.4 < y < 2.4$"),
     ( 2.5,  4.0, r"$2.5 < y < 4.0$"),
 ]
@@ -218,7 +218,8 @@ def plot_rpa_vs_y_grid(cnm, yc, tags, bands, energy):
             Rc, Rlo, Rhi = bands[comp][0][tag], bands[comp][1][tag], bands[comp][2][tag]
             xe, yc_s = step_from_centers(yc, Rc)
             color = COLORS.get(comp, "black")
-            line, = ax.step(xe, yc_s, where="post", lw=1.8, color=color, label=LABELS.get(comp, comp))
+            ls = "--" if comp == "eloss_broad" else "-"
+            line, = ax.step(xe, yc_s, where="post", lw=1.8, ls=ls, color=color, label=LABELS.get(comp, comp))
             ax.fill_between(xe, step_from_centers(yc, Rlo)[1], step_from_centers(yc, Rhi)[1], step="post", color=color, alpha=ALPHA_BAND, lw=0)
             if ip == 0: plotted_handles.append(line)
             any_plotted = True
@@ -261,7 +262,8 @@ def plot_rpa_vs_pT_grid(cnm, energy, y_windows, p_edges):
                 Rc, Rlo, Rhi = bands_pt[comp][0][tag], bands_pt[comp][1][tag], bands_pt[comp][2][tag]
                 xe, yc_s = step_from_centers(pc, Rc)
                 color = COLORS.get(comp, "black")
-                ax.step(xe, yc_s, where="post", lw=1.8, color=color, label=LABELS.get(comp, comp))
+                ls = "--" if comp == "eloss_broad" else "-"
+                ax.step(xe, yc_s, where="post", lw=1.8, ls=ls, color=color, label=LABELS.get(comp, comp))
                 ax.fill_between(xe, step_from_centers(pc, Rlo)[1], step_from_centers(pc, Rhi)[1], step="post", color=color, alpha=ALPHA_BAND, lw=0)
 
             ax.axhline(1.0, color="gray", ls=":", lw=0.8)
@@ -288,8 +290,9 @@ def plot_rpa_vs_centrality(cnm, energy, y_windows, pt_range_avg):
             if comp not in bands_cent: continue
             Rc, Rlo, Rhi, mbc, mblo, mbhi = bands_cent[comp]
             color = COLORS.get(comp, "black")
+            ls = "--" if comp == "eloss_broad" else "-"
             xe, yc_s = cent_step_arrays(cnm.cent_bins, Rc)
-            ax.step(xe, yc_s, where="post", lw=1.8, color=color, label=LABELS.get(comp, comp))
+            ax.step(xe, yc_s, where="post", lw=1.8, ls=ls, color=color, label=LABELS.get(comp, comp))
             ax.fill_between(xe, cent_step_arrays(cnm.cent_bins, Rlo)[1], cent_step_arrays(cnm.cent_bins, Rhi)[1], step="post", color=color, alpha=0.15, lw=0)
             ax.hlines(mbc, 0, 100, colors=color, linestyles=":", linewidth=1.5)
 
@@ -325,7 +328,8 @@ def run_energy(energy):
         if comp not in bands_y: continue
         Rc = bands_y[comp][0]["MB"]
         xe, yc_s = step_from_centers(yc, Rc)
-        ax_mb_y.step(xe, yc_s, where="post", lw=2.4, color=COLORS[comp], label=LABELS[comp])
+        ls = "--" if comp == "eloss_broad" else "-"
+        ax_mb_y.step(xe, yc_s, where="post", lw=2.2, ls=ls, color=COLORS[comp], label=LABELS[comp])
         ax_mb_y.fill_between(xe, step_from_centers(yc, bands_y[comp][1]["MB"])[1], step_from_centers(yc, bands_y[comp][2]["MB"])[1], step="post", color=COLORS[comp], alpha=0.1, lw=0)
     ax_mb_y.set_xlim(-5, 5); ax_mb_y.set_ylim(*Y_LIMITS_RPA); ax_mb_y.axhline(1.0, color="k", ls="-", lw=0.8)
     ax_mb_y.set_xlabel(r"$y$", fontsize=14); ax_mb_y.set_ylabel(r"$R^{\Upsilon}_{AA}$ (ELoss Only)", fontsize=14)
@@ -355,7 +359,8 @@ def run_energy(energy):
             if comp not in bands_pt_mb: continue
             Rc_mb = bands_pt_mb[comp][0]["MB"]
             xe, yc_s = step_from_centers(pc_mb, Rc_mb)
-            ax.step(xe, yc_s, where="post", lw=2.4, color=COLORS[comp], label=LABELS[comp] if i==1 else None)
+            ls = "--" if comp == "eloss_broad" else "-"
+            ax.step(xe, yc_s, where="post", lw=2.4, ls=ls, color=COLORS[comp], label=LABELS[comp] if i==1 else None)
             ax.fill_between(xe, step_from_centers(pc_mb, bands_pt_mb[comp][1]["MB"])[1], step_from_centers(pc_mb, bands_pt_mb[comp][2]["MB"])[1], step="post", color=COLORS[comp], alpha=0.1, lw=0)
         
         ax.axhline(1.0, color="k", ls="-", lw=0.8)

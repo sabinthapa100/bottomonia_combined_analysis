@@ -158,9 +158,11 @@ def main():
         xlim_pt=(0.0, 20.0),
         flip_y=False,
         step=True,
-        suptitle=r"O+O $\sqrt{s_{NN}}$ = 5.36 TeV — NPWLC",
+        suptitle=r"O+O, $\sqrt{s_{\rm NN}}$ = 5.36 TeV (MB) — NPWLC",
         save_dir=OUT_DIR,
         tag="rpa_NPWLC",
+        legend_loc="lower left",
+        text_loc=(0.03, 0.05),
     )
 
     # ---- Export Data ----
@@ -193,9 +195,11 @@ def main():
         xlim_pt=(0.0, 20.0),
         flip_y=False,
         step=True,
-        suptitle=r"O+O $\sqrt{s_{NN}}$ = 5.36 TeV — Pert",
+        suptitle=r"O+O, $\sqrt{s_{\rm NN}}$ = 5.36 TeV (MB) — Pert",
         save_dir=OUT_DIR,
         tag="rpa_Pert",
+        legend_loc="lower left",
+        text_loc=(0.03, 0.05),
     )
     
     # ---- Export Data ----
@@ -230,9 +234,10 @@ def main():
         ylim=(0.0, 1.15),
         xlim_y=(-5.0, 5.0),
         step=True,
-        suptitle=r"O+O $\sqrt{s_{NN}}$ = 5.36 TeV: NPWLC vs Pert",
+        suptitle=r"O+O, $\sqrt{s_{\rm NN}}$ = 5.36 TeV: NPWLC vs Pert (MB)",
         save_dir=OUT_DIR,
         tag="comparison_vs_y",
+        legend_loc_model="lower left",
     )
 
     # ----------------------------------------------------------------
@@ -246,9 +251,11 @@ def main():
         ylim=(0.0, 1.15),
         xlim_pt=(0.0, 20.0),
         step=True,
-        suptitle=r"O+O $\sqrt{s_{NN}}$ = 5.36 TeV",
+        suptitle=r"O+O, $\sqrt{s_{\rm NN}}$ = 5.36 TeV (MB)",
         save_dir=OUT_DIR,
         tag="rpa_pt_windows_compare",
+        legend_loc_model="lower left",
+        text_loc=(0.03, 0.05),
     )
 
     print(f"\n=== Done! All plots in: {OUT_DIR} ===")
