@@ -43,4 +43,4 @@ This project is licensed under the MIT License – see the [LICENSE](LICENSE) fi
 
 ---
 
-*Generated on 2026‑01‑21.*
+*Done on 2026‑01‑21.*
