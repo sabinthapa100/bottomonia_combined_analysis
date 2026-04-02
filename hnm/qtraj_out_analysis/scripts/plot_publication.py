@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 """
-Publication-quality plots matching Mathematica style from arXiv-2305.17841v2.
+Publication-ready plots for PbPb 5.02 TeV, PbPb 2.76 TeV, and AuAu 200 GeV.
 
-Style:
-- Theory: step function (Mathematica Join[..., {y[[-1]]}] trick)
-- Theory band: shaded envelope between k3 and k4
-- Data: error bars with experiment-specific markers
-- ALICE: open circles, ATLAS: open squares, CMS: open triangles
-- Dashed horizontal line at R_AA = 1
-- Grid lines at 0.2 opacity
+Features:
+- Step-function theory curves (Mathematica style)
+- Proper experiment legends: "CMS Upsilon(1S)" with correct color/marker
+- Error bars with bin edges for pT (LHC=2.5 GeV, RHIC=1.5 GeV bins)
+- Combined double-ratio figures (2S/1S and 3S/1S together)
+- Step and smooth Y plots
 """
 
 from __future__ import annotations
 
 import logging
 import os
-import re
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -27,48 +24,48 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+# ── Constants ────────────────────────────────────────────────────────
+REPO_ROOT = None
+for p in Path(__file__).resolve().parents:
+    if (p / "outputs").exists():
+        REPO_ROOT = p
+        break
+if REPO_ROOT is None:
+    REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SYSTEM_BASES = {
-    ("PbPb", "5.02 TeV"): "outputs/qtraj_outputs/LHC/PbPb5p02TeV/production",
-    ("PbPb", "2.76 TeV"): "outputs/qtraj_outputs/LHC/PbPb2p76TeV/production",
-    ("AuAu", "200 GeV"): "outputs/qtraj_outputs/RHIC/AuAu200GeV/production",
+    "pbpb5023": str(
+        REPO_ROOT / "outputs" / "qtraj_outputs" / "LHC" / "PbPb5p02TeV" / "production"
+    ),
+    "pbpb2760": str(
+        REPO_ROOT / "outputs" / "qtraj_outputs" / "LHC" / "PbPb2p76TeV" / "production"
+    ),
+    "auau200": str(
+        REPO_ROOT / "outputs" / "qtraj_outputs" / "RHIC" / "AuAu200GeV" / "production"
+    ),
 }
 
-EXPERIMENT_STYLES = {
-    "alice": {
-        "marker": "o",
-        "mfc": "none",
-        "mec": "#0066CC",
-        "ecolor": "#0066CC",
-        "ms": 6,
-        "mew": 1.5,
-    },
-    "atlas": {
-        "marker": "s",
-        "mfc": "none",
-        "mec": "#2CA02C",
-        "ecolor": "#2CA02C",
-        "ms": 6,
-        "mew": 1.5,
-    },
-    "cms": {
-        "marker": "^",
-        "mfc": "none",
-        "mec": "#D62728",
-        "ecolor": "#D62728",
-        "ms": 7,
-        "mew": 1.5,
-    },
-    "star": {
-        "marker": "D",
-        "mfc": "none",
-        "mec": "#9467BD",
-        "ecolor": "#9467BD",
-        "ms": 6,
-        "mew": 1.5,
-    },
+# Experiment colors and markers (consistent across all plots)
+EXP_STYLES = {
+    "alice": {"color": "#0066CC", "marker": "o", "ms": 6, "mew": 1.3, "mfc": "none"},
+    "atlas": {"color": "#2CA02C", "marker": "s", "ms": 6, "mew": 1.3, "mfc": "none"},
+    "cms": {"color": "#D62728", "marker": "^", "ms": 7, "mew": 1.3, "mfc": "none"},
+    "star": {"color": "#9467BD", "marker": "D", "ms": 6, "mew": 1.3, "mfc": "none"},
 }
 
+# State display names
+STATE_LABELS = {
+    "1s": r"$\Upsilon(1S)$",
+    "2s": r"$\Upsilon(2S)$",
+    "3s": r"$\Upsilon(3S)$",
+    "2s_1s": r"$\Upsilon(2S)/\Upsilon(1S)$",
+    "3s_1s": r"$\Upsilon(3S)/\Upsilon(1S)$",
+    "3s_2s": r"$\Upsilon(3S)/\Upsilon(2S)$",
+}
+
+# Theory curve colors per kappa
 KAPPA_COLORS = {
     "k3": "#1f77b4",
     "k4": "#ff7f0e",
@@ -76,280 +73,477 @@ KAPPA_COLORS = {
     "kappa5": "#2ca02c",
 }
 
-logger = logging.getLogger("plot_publication")
+
+def read_theory(path):
+    d = np.genfromtxt(path, delimiter=",", names=True, dtype=None, encoding=None)
+    return d
 
 
-def read_csv(path: str) -> np.ndarray:
-    return np.genfromtxt(path, delimiter=",", names=True, dtype=None, encoding=None)
+def read_exp(path):
+    d = np.genfromtxt(path, delimiter=",", names=True, dtype=None, encoding=None)
+    return d
 
 
-def draw_theory_envelope(ax, x, y_lo, y_hi, color="#888888", alpha=0.18, label=None):
-    """Draw shaded theory envelope."""
-    ax.fill_between(x, y_lo, y_hi, alpha=alpha, color=color, label=label, zorder=1)
+def get_exp_label(filename, obs_id):
+    """Build legend label like 'CMS Upsilon(1S)' from filename."""
+    name = filename.replace(obs_id + "__", "").replace("__exp.csv", "")
+    parts = name.split("_")
+    # Find experiment name
+    exp = parts[0].upper() if parts else name
+    # Find state
+    if "upsilon_3s" in name:
+        state = r"$\Upsilon(3S)$"
+    elif "upsilon_2s" in name:
+        state = r"$\Upsilon(2S)$"
+    elif "upsilon_1s" in name:
+        state = r"$\Upsilon(1S)$"
+    elif "star_y_3s" in name:
+        state = r"$\Upsilon(3S)$"
+    elif "star_y_2s" in name:
+        state = r"$\Upsilon(2S)$"
+    elif "star_y_1s" in name:
+        state = r"$\Upsilon(1S)$"
+    elif "2s_upsilon_1s" in name:
+        state = r"$\Upsilon(2S)/\Upsilon(1S)$"
+    elif "3s_upsilon_1s" in name:
+        state = r"$\Upsilon(3S)/\Upsilon(1S)$"
+    elif "3s_upsilon_2s" in name:
+        state = r"$\Upsilon(3S)/\Upsilon(2S)$"
+    else:
+        state = name
+    return f"{exp} {state}"
 
 
-def draw_theory_line(ax, x, y, label, color, lw=1.8, ls="-", alpha=0.9, zorder=2):
-    """Draw theory curve."""
+def get_exp_short(filename):
+    """Get experiment short name from filename."""
+    name = filename.lower()
+    if "alice" in name:
+        return "alice"
+    if "atlas" in name:
+        return "atlas"
+    if "cms" in name:
+        return "cms"
+    if "star" in name:
+        return "star"
+    return "unknown"
+
+
+def draw_theory_step(ax, x, y, label, color, lw=1.8, ls="-", alpha=0.9):
+    """Draw step-function theory curve (Mathematica Join[..., {y[[-1]]}])."""
+    x_s = np.concatenate([x, [x[-1]]])
+    y_s = np.concatenate([y, [y[-1]]])
     ax.plot(
-        x,
-        y,
+        x_s,
+        y_s,
         color=color,
         linewidth=lw,
         linestyle=ls,
         alpha=alpha,
         label=label,
-        zorder=zorder,
+        zorder=3,
+        drawstyle="steps-post",
     )
 
 
-def draw_experiment(ax, x, y, yerr, xerr=None, experiment="cms", label=""):
-    """Draw experiment data with error bars."""
-    style = EXPERIMENT_STYLES.get(experiment.lower(), EXPERIMENT_STYLES["cms"])
+def draw_theory_envelope_step(ax, x, y_lo, y_hi, color="#aaaaaa", alpha=0.15):
+    """Draw step-function theory envelope."""
+    x_s = np.concatenate([x, [x[-1]]])
+    lo_s = np.concatenate([y_lo, [y_lo[-1]]])
+    hi_s = np.concatenate([y_hi, [y_hi[-1]]])
+    ax.fill_between(x_s, lo_s, hi_s, alpha=alpha, color=color, step="post", zorder=1)
+
+
+def draw_exp(ax, x, y, yerr_lo, yerr_hi, exp_short, label, xerr_lo=None, xerr_hi=None):
+    """Draw experiment with error bars and proper marker."""
+    s = EXP_STYLES.get(exp_short, EXP_STYLES["cms"])
+    if xerr_lo is not None and xerr_hi is not None:
+        xerr = np.vstack([xerr_lo, xerr_hi])
+    else:
+        xerr = None
+    yerr = np.vstack([yerr_lo, yerr_hi])
     ax.errorbar(
         x,
         y,
         xerr=xerr,
         yerr=yerr,
-        fmt=style["marker"],
-        mfc=style["mfc"],
-        mec=style["mec"],
-        ecolor=style["ecolor"],
-        ms=style["ms"],
-        mew=style["mew"],
+        fmt=s["marker"],
+        color=s["color"],
+        ecolor=s["color"],
+        mfc=s["mfc"],
+        mec=s["color"],
+        ms=s["ms"],
+        mew=s["mew"],
         capsize=3,
+        capthick=1,
         linestyle="none",
+        linewidth=1,
         label=label,
         zorder=5,
     )
 
 
-def load_theory_pair(base, obs_id, state):
-    """Load k3/k4 theory CSVs for a state."""
+def find_theory(base, obs_id, state):
+    """Find theory CSVs for a state."""
+    th_dir = os.path.join(base, "data", "comparison", "theory")
+    if not os.path.isdir(th_dir):
+        return {}
     result = {}
-    theory_dir = os.path.join(base, "data", "comparison", "theory")
-    if not os.path.isdir(theory_dir):
-        return result
-    for f in os.listdir(theory_dir):
+    for f in os.listdir(th_dir):
         if f.startswith(f"{obs_id}__{state}_") and f.endswith("_theory.csv"):
             kappa = f.replace(f"{obs_id}__{state}_", "").replace("_theory.csv", "")
-            result[kappa] = read_csv(os.path.join(theory_dir, f))
+            result[kappa] = read_theory(os.path.join(th_dir, f))
     return result
 
 
-def load_envelope(base, obs_id, state):
-    """Load envelope CSV if available."""
+def find_envelope(base, obs_id, state):
+    """Find envelope CSV."""
     env_dir = os.path.join(base, "data", "comparison", "theory_envelopes")
     path = os.path.join(env_dir, f"{obs_id}__{state}__theory_envelope.csv")
     if os.path.exists(path):
-        return read_csv(path)
+        return read_theory(path)
     return None
 
 
-def load_experiments(base, obs_id):
-    """Load all experimental CSVs for an observable."""
+def find_experiments(base, obs_id):
+    """Find all experimental CSVs."""
     exp_dir = os.path.join(base, "data", "comparison", "experiment")
     if not os.path.isdir(exp_dir):
         return []
-    experiments = []
+    result = []
     for f in sorted(os.listdir(exp_dir)):
         if f.startswith(obs_id) and f.endswith("__exp.csv"):
-            d = read_csv(os.path.join(exp_dir, f))
-            name = f.replace(f"{obs_id}__", "").replace("__exp.csv", "")
-            short = next(
-                (k for k in ["alice", "atlas", "cms", "star"] if k in name.lower()),
-                name,
-            )
-            experiments.append((d, name, short))
-    return experiments
+            result.append(f)
+    return result
 
 
-def get_x_label(obs_type):
-    m = {
-        "RAA_vs_npart": r"$\langle N_{\mathrm{part}} \rangle$",
-        "RAA_vs_pt": r"$p_T$ [GeV]",
-        "RAA_vs_y": r"$|y|$",
-        "double_ratio_vs_npart": r"$\langle N_{\mathrm{part}} \rangle$",
-        "double_ratio_vs_pt": r"$p_T$ [GeV]",
-    }
-    return m.get(obs_type, obs_type)
+def plot_raa_npart(base, obs_id, title, outdir):
+    """R_AA vs N_part: 3-panel (1S, 2S, 3S) with step functions."""
+    states = ["1s", "2s", "3s"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
 
-
-def get_y_label(obs_type):
-    if obs_type.startswith("RAA"):
-        return r"$R_{\mathrm{AA}}$"
-    if obs_type.startswith("double_ratio"):
-        return "Double ratio"
-    return obs_type
-
-
-def get_state_label(state):
-    """Short LaTeX label for a state."""
-    s = (
-        state.lower()
-        .replace("_", " ")
-        .replace("s", "S")
-        .replace("1s", "1S")
-        .replace("2s", "2S")
-        .replace("3s", "3S")
-    )
-    if "2s 1s" in s:
-        return r"$\Upsilon(2S)/\Upsilon(1S)$"
-    if "3s 1s" in s:
-        return r"$\Upsilon(3S)/\Upsilon(1S)$"
-    if "3s 2s" in s:
-        return r"$\Upsilon(3S)/\Upsilon(2S)$"
-    if "1s" in s:
-        return r"$\Upsilon(1S)$"
-    if "2s" in s:
-        return r"$\Upsilon(2S)$"
-    if "3s" in s:
-        return r"$\Upsilon(3S)$"
-    return state
-
-
-def plot_single_observable(base, obs_id, obs_type, system, energy, states, outdir):
-    """Create publication plot for one observable."""
-    n_panels = len(states)
-    fig, axes = plt.subplots(1, n_panels, figsize=(5.5 * n_panels, 5), squeeze=False)
-    axes_flat = axes.ravel()
-
-    for ax, state in zip(axes_flat, states):
+    for ax, state in zip(axes, states):
         # Theory envelope
-        envelope = load_envelope(base, obs_id, state)
-        if envelope is not None:
-            x = envelope["x"]
-            draw_theory_envelope(ax, x, envelope["y_lower"], envelope["y_upper"])
+        env = find_envelope(base, obs_id, state)
+        if env is not None:
+            draw_theory_envelope_step(ax, env["x"], env["y_lower"], env["y_upper"])
 
-        # Individual theory curves
-        theory = load_theory_pair(base, obs_id, state)
-        for kappa, data in theory.items():
-            x = data["x"]
-            y = data["y_center"]
-            color = KAPPA_COLORS.get(kappa, "#333333")
-            draw_theory_line(ax, x, y, label=kappa, color=color)
+        # Theory curves (step)
+        theory = find_theory(base, obs_id, state)
+        for kappa, d in theory.items():
+            draw_theory_step(
+                ax,
+                d["x"],
+                d["y_center"],
+                label=f"qtraj-NLO {kappa}",
+                color=KAPPA_COLORS.get(kappa, "#333"),
+                lw=1.8,
+            )
 
         # Experiments
-        experiments = load_experiments(base, obs_id)
-        for exp_data, exp_name, exp_short in experiments:
-            ncols = exp_data.dtype.names
-            x = exp_data["x"]
-            y = exp_data["y"]
-            yerr_lo = exp_data["yerr_low"] if "yerr_low" in ncols else np.zeros(len(x))
-            yerr_hi = (
-                exp_data["yerr_high"] if "yerr_high" in ncols else np.zeros(len(x))
-            )
-            xerr = None
-            if "x_low" in ncols and "x_high" in ncols:
-                xerr = np.vstack([x - exp_data["x_low"], exp_data["x_high"] - x])
-            draw_experiment(
-                ax, x, y, yerr_hi, xerr=xerr, experiment=exp_short, label=exp_name
-            )
+        exp_files = find_experiments(base, obs_id)
+        for ef in exp_files:
+            d = read_exp(os.path.join(base, "data", "comparison", "experiment", ef))
+            short = get_exp_short(ef)
+            label = get_exp_label(ef, obs_id)
+            draw_exp(ax, d["x"], d["y"], d["yerr_low"], d["yerr_high"], short, label)
 
-        # Formatting
-        ax.set_xlabel(get_x_label(obs_type), fontsize=11)
-        ax.set_ylabel(get_y_label(obs_type), fontsize=11)
-        ax.set_title(get_state_label(state), fontsize=12)
-        ax.axhline(1.0, color="0.5", linewidth=0.8, linestyle="--", zorder=0)
+        ax.axhline(1.0, color="0.5", lw=0.7, ls="--", zorder=0)
+        ax.set_xlabel(r"$\langle N_{\mathrm{part}} \rangle$", fontsize=12)
+        ax.set_ylabel(r"$R_{\mathrm{AA}}$", fontsize=12)
+        ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
         ax.set_ylim(bottom=0.0)
-        ax.grid(alpha=0.2, linewidth=0.5)
-        ax.legend(fontsize=7, loc="best", framealpha=0.9)
+        ax.grid(alpha=0.15, lw=0.5)
+        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
 
-    fig.suptitle(f"{system} {energy}", fontsize=13, y=1.02)
+    fig.suptitle(title, fontsize=14, y=1.02)
     fig.tight_layout()
-
-    os.makedirs(outdir, exist_ok=True)
-    pdf_path = os.path.join(outdir, f"{obs_id}.pdf")
-    png_path = os.path.join(outdir, f"{obs_id}.png")
-    fig.savefig(pdf_path, bbox_inches="tight")
-    fig.savefig(png_path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
-    return pdf_path, png_path
+    _save(fig, outdir, obs_id)
 
 
-def plot_all_systems(repo_root):
-    repo = Path(repo_root)
-    observables = [
-        # PbPb 5.02 TeV
-        ("pbpb5023_raavsnpart", "RAA_vs_npart", "PbPb", "5.02 TeV", ["1s", "2s", "3s"]),
-        ("pbpb5023_raavspt", "RAA_vs_pt", "PbPb", "5.02 TeV", ["1s", "2s", "3s"]),
-        ("pbpb5023_raavsy", "RAA_vs_y", "PbPb", "5.02 TeV", ["1s", "2s", "3s"]),
-        (
-            "pbpb5023_ratio21vsnpart",
-            "double_ratio_vs_npart",
-            "PbPb",
-            "5.02 TeV",
-            ["2s_1s"],
-        ),
-        ("pbpb5023_ratio21vspt", "double_ratio_vs_pt", "PbPb", "5.02 TeV", ["2s_1s"]),
-        (
-            "pbpb5023_ratio31vsnpart",
-            "double_ratio_vs_npart",
-            "PbPb",
-            "5.02 TeV",
-            ["3s_1s"],
-        ),
-        ("pbpb5023_ratio32vspt", "double_ratio_vs_pt", "PbPb", "5.02 TeV", ["3s_2s"]),
-        # PbPb 2.76 TeV
-        ("pbpb2760_raavsnpart", "RAA_vs_npart", "PbPb", "2.76 TeV", ["1s", "2s", "3s"]),
-        ("pbpb2760_raavspt", "RAA_vs_pt", "PbPb", "2.76 TeV", ["1s", "2s", "3s"]),
-        ("pbpb2760_raavsy", "RAA_vs_y", "PbPb", "2.76 TeV", ["1s", "2s", "3s"]),
-        # AuAu 200 GeV
-        ("auau200_raavsnpart", "RAA_vs_npart", "AuAu", "200 GeV", ["1s", "2s", "3s"]),
-        ("auau200_raavspt", "RAA_vs_pt", "AuAu", "200 GeV", ["1s", "2s"]),
-        ("auau200_raavsy", "RAA_vs_y", "AuAu", "200 GeV", ["1s", "2s", "3s"]),
+def plot_raa_pt(base, obs_id, title, outdir):
+    """R_AA vs pT: 3-panel with step functions and bin-edge error bars."""
+    states = ["1s", "2s", "3s"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    for ax, state in zip(axes, states):
+        # Theory envelope
+        env = find_envelope(base, obs_id, state)
+        if env is not None:
+            draw_theory_envelope_step(ax, env["x"], env["y_lower"], env["y_upper"])
+
+        # Theory curves (step)
+        theory = find_theory(base, obs_id, state)
+        for kappa, d in theory.items():
+            draw_theory_step(
+                ax,
+                d["x"],
+                d["y_center"],
+                label=f"qtraj-NLO {kappa}",
+                color=KAPPA_COLORS.get(kappa, "#333"),
+                lw=1.8,
+            )
+
+        # Experiments (with bin edges)
+        exp_files = find_experiments(base, obs_id)
+        for ef in exp_files:
+            d = read_exp(os.path.join(base, "data", "comparison", "experiment", ef))
+            short = get_exp_short(ef)
+            label = get_exp_label(ef, obs_id)
+            xerr_lo = d["x"] - d["x_low"]
+            xerr_hi = d["x_high"] - d["x"]
+            draw_exp(
+                ax,
+                d["x"],
+                d["y"],
+                d["yerr_low"],
+                d["yerr_high"],
+                short,
+                label,
+                xerr_lo=xerr_lo,
+                xerr_hi=xerr_hi,
+            )
+
+        ax.axhline(1.0, color="0.5", lw=0.7, ls="--", zorder=0)
+        ax.set_xlabel(r"$p_T$ [GeV]", fontsize=12)
+        ax.set_ylabel(r"$R_{\mathrm{AA}}$", fontsize=12)
+        ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
+        ax.set_ylim(bottom=0.0)
+        ax.grid(alpha=0.15, lw=0.5)
+        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
+
+    fig.suptitle(title, fontsize=14, y=1.02)
+    fig.tight_layout()
+    _save(fig, outdir, obs_id)
+
+
+def plot_raa_y(base, obs_id, title, outdir):
+    """R_AA vs y: 3-panel with step functions."""
+    states = ["1s", "2s", "3s"]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    for ax, state in zip(axes, states):
+        # Theory envelope
+        env = find_envelope(base, obs_id, state)
+        if env is not None:
+            draw_theory_envelope_step(ax, env["x"], env["y_lower"], env["y_upper"])
+
+        # Theory curves (step)
+        theory = find_theory(base, obs_id, state)
+        for kappa, d in theory.items():
+            draw_theory_step(
+                ax,
+                d["x"],
+                d["y_center"],
+                label=f"qtraj-NLO {kappa}",
+                color=KAPPA_COLORS.get(kappa, "#333"),
+                lw=1.8,
+            )
+
+        # Experiments
+        exp_files = find_experiments(base, obs_id)
+        for ef in exp_files:
+            d = read_exp(os.path.join(base, "data", "comparison", "experiment", ef))
+            short = get_exp_short(ef)
+            label = get_exp_label(ef, obs_id)
+            draw_exp(ax, d["x"], d["y"], d["yerr_low"], d["yerr_high"], short, label)
+
+        ax.axhline(1.0, color="0.5", lw=0.7, ls="--", zorder=0)
+        ax.set_xlabel(r"$|y|$", fontsize=12)
+        ax.set_ylabel(r"$R_{\mathrm{AA}}$", fontsize=12)
+        ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
+        ax.set_ylim(bottom=0.0)
+        ax.grid(alpha=0.15, lw=0.5)
+        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
+
+    fig.suptitle(title, fontsize=14, y=1.02)
+    fig.tight_layout()
+    _save(fig, outdir, obs_id)
+
+
+def plot_double_ratios(
+    base, obs_21_npart, obs_21_pt, obs_31_npart, obs_32_pt, title, outdir
+):
+    """Combined double-ratio figure: 2x2 grid."""
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+    panels = [
+        (axes[0, 0], obs_21_npart, "2s_1s", r"$\langle N_{\mathrm{part}} \rangle$"),
+        (axes[0, 1], obs_21_pt, "2s_1s", r"$p_T$ [GeV]"),
+        (axes[1, 0], obs_31_npart, "3s_1s", r"$\langle N_{\mathrm{part}} \rangle$"),
+        (axes[1, 1], obs_32_pt, "3s_2s", r"$p_T$ [GeV]"),
     ]
 
-    total = 0
-    for obs_id, obs_type, system, energy, states in observables:
-        key = (system, energy)
-        base = str(repo / SYSTEM_BASES.get(key, ""))
-        if not os.path.exists(base):
-            logger.warning(f"Base not found: {base} for {obs_id}")
+    for ax, obs_id, state, xlabel in panels:
+        if not obs_id:
+            ax.set_visible(False)
             continue
 
-        # Output directory
-        sys_tag = system.replace(" ", "").replace("PbPb", "LHC").replace("AuAu", "RHIC")
-        eng_tag = energy.replace(" ", "").replace(".", "p")
-        if system == "PbPb":
-            outdir = str(
-                repo
+        # Theory envelope
+        env = find_envelope(base, obs_id, state)
+        if env is not None:
+            draw_theory_envelope_step(ax, env["x"], env["y_lower"], env["y_upper"])
+
+        # Theory curves
+        theory = find_theory(base, obs_id, state)
+        for kappa, d in theory.items():
+            draw_theory_step(
+                ax,
+                d["x"],
+                d["y_center"],
+                label=f"qtraj-NLO {kappa}",
+                color=KAPPA_COLORS.get(kappa, "#333"),
+                lw=1.8,
+            )
+
+        # Experiments
+        exp_files = find_experiments(base, obs_id)
+        for ef in exp_files:
+            d = read_exp(os.path.join(base, "data", "comparison", "experiment", ef))
+            short = get_exp_short(ef)
+            label = get_exp_label(ef, obs_id)
+            xerr_lo = d["x"] - d["x_low"] if "x_low" in d.dtype.names else None
+            xerr_hi = d["x_high"] - d["x"] if "x_high" in d.dtype.names else None
+            draw_exp(
+                ax,
+                d["x"],
+                d["y"],
+                d["yerr_low"],
+                d["yerr_high"],
+                short,
+                label,
+                xerr_lo=xerr_lo,
+                xerr_hi=xerr_hi,
+            )
+
+        ax.axhline(1.0, color="0.5", lw=0.7, ls="--", zorder=0)
+        ax.set_xlabel(xlabel, fontsize=11)
+        ax.set_ylabel("Double ratio", fontsize=11)
+        ax.set_title(STATE_LABELS.get(state, state), fontsize=12)
+        ax.set_ylim(bottom=0.0)
+        ax.grid(alpha=0.15, lw=0.5)
+        ax.legend(fontsize=7, loc="upper right", framealpha=0.9)
+
+    fig.suptitle(title, fontsize=14, y=1.02)
+    fig.tight_layout()
+    _save(
+        fig,
+        outdir,
+        f"{obs_21_npart.split('__')[0]}_double_ratios"
+        if obs_21_npart
+        else "double_ratios",
+    )
+
+
+def _save(fig, outdir, name):
+    os.makedirs(outdir, exist_ok=True)
+    pdf = os.path.join(outdir, f"{name}.pdf")
+    png = os.path.join(outdir, f"{name}.png")
+    fig.savefig(pdf, bbox_inches="tight")
+    fig.savefig(png, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print(f"  ✓ {name} → {pdf}")
+
+
+def run_all():
+    logging.basicConfig(level=logging.WARNING)
+
+    systems = [
+        {
+            "key": "pbpb5023",
+            "title": "PbPb 5.02 TeV",
+            "outdir": str(
+                REPO_ROOT
                 / "outputs"
                 / "qtraj_outputs"
                 / "LHC"
-                / eng_tag
+                / "PbPb5p02TeV"
                 / "publication"
                 / "figures"
-            )
-        else:
-            outdir = str(
-                repo
+            ),
+            "plots": {
+                "npart": ("pbpb5023_raavsnpart", plot_raa_npart),
+                "pt": ("pbpb5023_raavspt", plot_raa_pt),
+                "y": ("pbpb5023_raavsy", plot_raa_y),
+            },
+            "double_ratios": {
+                "obs_21_npart": "pbpb5023_ratio21vsnpart",
+                "obs_21_pt": "pbpb5023_ratio21vspt",
+                "obs_31_npart": "pbpb5023_ratio31vsnpart",
+                "obs_32_pt": "pbpb5023_ratio32vspt",
+            },
+        },
+        {
+            "key": "pbpb2760",
+            "title": "PbPb 2.76 TeV",
+            "outdir": str(
+                REPO_ROOT
+                / "outputs"
+                / "qtraj_outputs"
+                / "LHC"
+                / "PbPb2p76TeV"
+                / "publication"
+                / "figures"
+            ),
+            "plots": {
+                "npart": ("pbpb2760_raavsnpart", plot_raa_npart),
+                "pt": ("pbpb2760_raavspt", plot_raa_pt),
+                "y": ("pbpb2760_raavsy", plot_raa_y),
+            },
+        },
+        {
+            "key": "auau200",
+            "title": "AuAu 200 GeV",
+            "outdir": str(
+                REPO_ROOT
                 / "outputs"
                 / "qtraj_outputs"
                 / "RHIC"
-                / eng_tag
+                / "AuAu200GeV"
                 / "publication"
                 / "figures"
-            )
+            ),
+            "plots": {
+                "npart": ("auau200_raavsnpart", plot_raa_npart),
+                "pt": ("auau200_raavspt", plot_raa_pt),
+                "y": ("auau200_raavsy", plot_raa_y),
+            },
+        },
+    ]
 
-        try:
-            pdf, png = plot_single_observable(
-                base, obs_id, obs_type, system, energy, states, outdir
-            )
-            logger.info(f"✓ {obs_id} → {pdf}")
-            total += 1
-        except Exception as e:
-            logger.error(f"✗ {obs_id}: {e}")
+    for sys_cfg in systems:
+        base = SYSTEM_BASES[sys_cfg["key"]]
+        outdir = sys_cfg["outdir"]
+        title = sys_cfg["title"]
+        print(f"\n{'=' * 60}")
+        print(f"  {title}")
+        print(f"{'=' * 60}")
 
-    logger.info(f"Generated {total} publication plots")
+        for plot_name, (obs_id, plot_func) in sys_cfg["plots"].items():
+            try:
+                plot_func(base, obs_id, f"{title} — {obs_id.replace('_', ' ')}", outdir)
+            except Exception as e:
+                print(f"  ✗ {obs_id}: {e}")
+
+        # Double ratios (only for PbPb 5.02 TeV)
+        if "double_ratios" in sys_cfg:
+            dr = sys_cfg["double_ratios"]
+            try:
+                plot_double_ratios(
+                    base,
+                    dr.get("obs_21_npart", ""),
+                    dr.get("obs_21_pt", ""),
+                    dr.get("obs_31_npart", ""),
+                    dr.get("obs_32_pt", ""),
+                    f"{title} — Double Ratios",
+                    outdir,
+                )
+            except Exception as e:
+                print(f"  ✗ double_ratios: {e}")
+
+    print(f"\n{'=' * 60}")
+    print("  DONE — all publication plots generated")
+    print(f"{'=' * 60}")
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    here = Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "inputs").exists():
-            repo_root = str(parent)
-            break
-    else:
-        repo_root = str(here.parents[1])
-    plot_all_systems(repo_root)
+    run_all()
