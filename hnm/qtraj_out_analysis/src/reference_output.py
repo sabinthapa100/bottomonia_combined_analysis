@@ -56,7 +56,9 @@ def _resolve_output_root(output_root: Optional[Path | str]) -> Path:
     return root.resolve()
 
 
-def get_output_layout(bundle: ObservableReferenceBundle, output_root: Optional[Path | str] = None) -> Dict[str, Path]:
+def get_output_layout(
+    bundle: ObservableReferenceBundle, output_root: Optional[Path | str] = None
+) -> Dict[str, Path]:
     collider, system_key = _system_output_key(bundle)
     base = _resolve_output_root(output_root) / collider / system_key / "production"
     category = bundle.category
@@ -79,18 +81,28 @@ def _theory_to_rows(series: TheoryBandSeries) -> np.ndarray:
     if series.bin_edges is not None and len(series.bin_edges) == len(series.x) + 1:
         x_low = series.bin_edges[:-1]
         x_high = series.bin_edges[1:]
-    return np.column_stack([series.x, x_low, x_high, series.center, series.lower, series.upper])
+    return np.column_stack(
+        [series.x, x_low, x_high, series.center, series.lower, series.upper]
+    )
 
 
 def save_theory_series(series: TheoryBandSeries, outdir: Path) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
-    path = outdir / (_series_filename(series.observable_id, f"{series.series_label}_{series.source_label}", "theory.csv"))
+    path = outdir / (
+        _series_filename(
+            series.observable_id,
+            f"{series.series_label}_{series.source_label}",
+            "theory.csv",
+        )
+    )
     header = "x,x_low,x_high,y_center,y_lower,y_upper"
     np.savetxt(path, _theory_to_rows(series), delimiter=",", header=header, comments="")
     return path
 
 
-def _combine_theory_envelopes(series_list: Iterable[TheoryBandSeries]) -> Tuple[TheoryBandSeries, ...]:
+def _combine_theory_envelopes(
+    series_list: Iterable[TheoryBandSeries],
+) -> Tuple[TheoryBandSeries, ...]:
     envelopes: List[TheoryBandSeries] = []
     for series_label, grouped_series in _group_theory_by_label(series_list).items():
         ordered = list(grouped_series)
@@ -99,7 +111,9 @@ def _combine_theory_envelopes(series_list: Iterable[TheoryBandSeries]) -> Tuple[
         bin_edges = first.bin_edges
 
         for candidate in ordered[1:]:
-            if x.shape != candidate.x.shape or not np.allclose(x, candidate.x, atol=1e-12, rtol=0.0):
+            if x.shape != candidate.x.shape or not np.allclose(
+                x, candidate.x, atol=1e-12, rtol=0.0
+            ):
                 raise ValueError(
                     f"Cannot combine theory envelope for '{first.observable_id}/{series_label}': mismatched x-grid"
                 )
@@ -132,7 +146,9 @@ def _combine_theory_envelopes(series_list: Iterable[TheoryBandSeries]) -> Tuple[
                 center=np.mean(centers, axis=0),
                 lower=np.min(lowers, axis=0),
                 upper=np.max(uppers, axis=0),
-                bin_edges=None if bin_edges is None else np.asarray(bin_edges, dtype=np.float64).copy(),
+                bin_edges=None
+                if bin_edges is None
+                else np.asarray(bin_edges, dtype=np.float64).copy(),
             )
         )
     return tuple(envelopes)
@@ -140,7 +156,11 @@ def _combine_theory_envelopes(series_list: Iterable[TheoryBandSeries]) -> Tuple[
 
 def save_theory_envelope_series(series: TheoryBandSeries, outdir: Path) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
-    path = outdir / (_series_filename(series.observable_id, series.series_label, "theory_envelope.csv"))
+    path = outdir / (
+        _series_filename(
+            series.observable_id, series.series_label, "theory_envelope.csv"
+        )
+    )
     header = "x,x_low,x_high,y_center,y_lower,y_upper"
     np.savetxt(path, _theory_to_rows(series), delimiter=",", header=header, comments="")
     return path
@@ -155,7 +175,9 @@ def save_experimental_series(series: ExperimentalSeries, outdir: Path) -> Path:
     x_low = series.x if series.x_low is None else series.x_low
     x_high = series.x if series.x_high is None else series.x_high
     yerr_low = np.zeros_like(series.y) if series.yerr_low is None else series.yerr_low
-    yerr_high = np.zeros_like(series.y) if series.yerr_high is None else series.yerr_high
+    yerr_high = (
+        np.zeros_like(series.y) if series.yerr_high is None else series.yerr_high
+    )
     arr = np.column_stack([series.x, x_low, x_high, series.y, yerr_low, yerr_high])
     header = "x,x_low,x_high,y,yerr_low,yerr_high"
     np.savetxt(path, arr, delimiter=",", header=header, comments="")
@@ -168,6 +190,12 @@ def _bundle_manifest(
     exp_paths: List[Path],
     envelope_paths: List[Path],
 ) -> dict:
+    def _path_ref(path: Path) -> str:
+        try:
+            return str(path.relative_to(REPO_ROOT))
+        except ValueError:
+            return str(path)
+
     return {
         "observable_id": bundle.observable_id,
         "system": bundle.system,
@@ -179,29 +207,40 @@ def _bundle_manifest(
         "datafile_sources": list(bundle.datafile_sources),
         "issues": list(bundle.issues),
         "centrality_labels": list(bundle.centrality_labels),
-        "theory_files": [str(path.relative_to(REPO_ROOT)) for path in theory_paths],
-        "theory_envelope_files": [str(path.relative_to(REPO_ROOT)) for path in envelope_paths],
-        "experimental_files": [str(path.relative_to(REPO_ROOT)) for path in exp_paths],
+        "theory_files": [_path_ref(path) for path in theory_paths],
+        "theory_envelope_files": [_path_ref(path) for path in envelope_paths],
+        "experimental_files": [_path_ref(path) for path in exp_paths],
     }
 
 
-def save_bundle(bundle: ObservableReferenceBundle, output_root: Optional[Path | str] = None) -> Dict[str, Path]:
+def save_bundle(
+    bundle: ObservableReferenceBundle, output_root: Optional[Path | str] = None
+) -> Dict[str, Path]:
     layout = get_output_layout(bundle, output_root=output_root)
     theory_dir = layout["data"] / "theory"
     theory_envelope_dir = layout["data"] / "theory_envelopes"
     exp_dir = layout["data"] / "experiment"
     layout["manifests"].mkdir(parents=True, exist_ok=True)
 
-    theory_paths = [save_theory_series(series, theory_dir) for series in bundle.theory_series]
+    theory_paths = [
+        save_theory_series(series, theory_dir) for series in bundle.theory_series
+    ]
     envelope_paths = [
         save_theory_envelope_series(series, theory_envelope_dir)
         for series in _combine_theory_envelopes(bundle.theory_series)
     ]
-    exp_paths = [save_experimental_series(series, exp_dir) for series in bundle.experimental_series]
+    exp_paths = [
+        save_experimental_series(series, exp_dir)
+        for series in bundle.experimental_series
+    ]
 
     manifest_path = layout["manifests"] / f"{bundle.observable_id}.json"
     manifest_path.write_text(
-        json.dumps(_bundle_manifest(bundle, theory_paths, exp_paths, envelope_paths), indent=2, sort_keys=True)
+        json.dumps(
+            _bundle_manifest(bundle, theory_paths, exp_paths, envelope_paths),
+            indent=2,
+            sort_keys=True,
+        )
         + "\n"
     )
 
@@ -215,7 +254,9 @@ def save_bundle(bundle: ObservableReferenceBundle, output_root: Optional[Path | 
     }
 
 
-def _step_xy(series: TheoryBandSeries, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _step_xy(
+    series: TheoryBandSeries, values: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
     if series.bin_edges is None:
         return series.x, values
     if len(series.bin_edges) == len(values) + 1:
@@ -226,14 +267,18 @@ def _step_xy(series: TheoryBandSeries, values: np.ndarray) -> Tuple[np.ndarray, 
     return series.x, values
 
 
-def _group_theory_by_label(series_list: Iterable[TheoryBandSeries]) -> Dict[str, List[TheoryBandSeries]]:
+def _group_theory_by_label(
+    series_list: Iterable[TheoryBandSeries],
+) -> Dict[str, List[TheoryBandSeries]]:
     grouped: Dict[str, List[TheoryBandSeries]] = {}
     for series in series_list:
         grouped.setdefault(series.series_label, []).append(series)
     return grouped
 
 
-def _group_experiment_by_state(series_list: Iterable[ExperimentalSeries]) -> Dict[str, List[ExperimentalSeries]]:
+def _group_experiment_by_state(
+    series_list: Iterable[ExperimentalSeries],
+) -> Dict[str, List[ExperimentalSeries]]:
     grouped: Dict[str, List[ExperimentalSeries]] = {}
     for series in series_list:
         label = series.state
@@ -364,11 +409,24 @@ def _marker_for_experiment(experiment: str) -> str:
 
 def _observable_annotation(bundle: ObservableReferenceBundle) -> str:
     system_map = {
-        ("PbPb", "5.02 TeV"): (r"$\mathrm{Pb{+}Pb}$", r"$\sqrt{s_{NN}} = 5.02\ \mathrm{TeV}$"),
-        ("PbPb", "2.76 TeV"): (r"$\mathrm{Pb{+}Pb}$", r"$\sqrt{s_{NN}} = 2.76\ \mathrm{TeV}$"),
-        ("AuAu", "200 GeV"): (r"$\mathrm{Au{+}Au}$", r"$\sqrt{s_{NN}} = 200\ \mathrm{GeV}$"),
+        ("PbPb", "5.02 TeV"): (
+            r"$\mathrm{Pb{+}Pb}$",
+            r"$\sqrt{s_{NN}} = 5.02\ \mathrm{TeV}$",
+        ),
+        ("PbPb", "2.76 TeV"): (
+            r"$\mathrm{Pb{+}Pb}$",
+            r"$\sqrt{s_{NN}} = 2.76\ \mathrm{TeV}$",
+        ),
+        ("AuAu", "200 GeV"): (
+            r"$\mathrm{Au{+}Au}$",
+            r"$\sqrt{s_{NN}} = 200\ \mathrm{GeV}$",
+        ),
     }
-    lines = list(system_map.get((bundle.system, bundle.energy_label), (bundle.system, bundle.energy_label)))
+    lines = list(
+        system_map.get(
+            (bundle.system, bundle.energy_label), (bundle.system, bundle.energy_label)
+        )
+    )
 
     kappas: List[int] = []
     for series in bundle.theory_series:
@@ -386,13 +444,20 @@ def _observable_annotation(bundle: ObservableReferenceBundle) -> str:
 
 
 def _step_has_bins(series: TheoryBandSeries) -> bool:
-    return series.bin_edges is not None and len(series.bin_edges) in {len(series.x), len(series.x) + 1}
+    return series.bin_edges is not None and len(series.bin_edges) in {
+        len(series.x),
+        len(series.x) + 1,
+    }
 
 
 def _use_step_style(bundle: ObservableReferenceBundle) -> bool:
-    if bundle.system == "AuAu" and bundle.energy_label == "200 GeV":
-        return False
-    return bundle.observable_type in {"RAA_vs_pt", "RAA_vs_y", "double_ratio_vs_pt"}
+    return bundle.observable_type in {
+        "RAA_vs_npart",
+        "RAA_vs_pt",
+        "RAA_vs_y",
+        "double_ratio_vs_npart",
+        "double_ratio_vs_pt",
+    }
 
 
 def _draw_theory_series(
@@ -407,12 +472,34 @@ def _draw_theory_series(
 ) -> None:
     x_vals, y_vals = _step_xy(series, series.center)
     if _step_has_bins(series) and _use_step_style(bundle):
-        ax.step(x_vals, y_vals, where="post", label=label, linewidth=linewidth, alpha=alpha, linestyle=linestyle)
+        ax.step(
+            x_vals,
+            y_vals,
+            where="post",
+            label=label,
+            linewidth=linewidth,
+            alpha=alpha,
+            linestyle=linestyle,
+        )
     else:
-        ax.plot(series.x, series.center, label=label, linewidth=linewidth, alpha=alpha, linestyle=linestyle)
+        ax.plot(
+            series.x,
+            series.center,
+            label=label,
+            linewidth=linewidth,
+            alpha=alpha,
+            linestyle=linestyle,
+        )
 
 
-def _draw_theory_band(ax, series: TheoryBandSeries, bundle: ObservableReferenceBundle, *, label: str, alpha: float) -> None:
+def _draw_theory_band(
+    ax,
+    series: TheoryBandSeries,
+    bundle: ObservableReferenceBundle,
+    *,
+    label: str,
+    alpha: float,
+) -> None:
     x_vals, y_lower = _step_xy(series, series.lower)
     _, y_upper = _step_xy(series, series.upper)
     if _step_has_bins(series) and _use_step_style(bundle):
@@ -421,7 +508,9 @@ def _draw_theory_band(ax, series: TheoryBandSeries, bundle: ObservableReferenceB
         ax.fill_between(series.x, series.lower, series.upper, alpha=alpha, label=label)
 
 
-def _panel_ymax(theory_series: Iterable[TheoryBandSeries], exp_series: Iterable[ExperimentalSeries]) -> Optional[float]:
+def _panel_ymax(
+    theory_series: Iterable[TheoryBandSeries], exp_series: Iterable[ExperimentalSeries]
+) -> Optional[float]:
     maxima: List[float] = []
     for series in theory_series:
         finite = series.upper[np.isfinite(series.upper)]
@@ -463,32 +552,55 @@ def _theory_support_xmax(theory_series: Iterable[TheoryBandSeries]) -> Optional[
 def _plot_combined_bundle(ax, bundle: ObservableReferenceBundle) -> None:
     theory_grouped = _group_theory_by_label(bundle.theory_series)
     theory_envelopes = {
-        series.series_label: series for series in _combine_theory_envelopes(bundle.theory_series)
+        series.series_label: series
+        for series in _combine_theory_envelopes(bundle.theory_series)
     }
 
     for label, grouped_series in theory_grouped.items():
         color = _state_color(label)
         envelope = theory_envelopes.get(label)
         if envelope is not None:
-            _draw_theory_band(ax, envelope, bundle, label=f"{label} envelope", alpha=0.14)
+            _draw_theory_band(
+                ax, envelope, bundle, label=f"{label} envelope", alpha=0.14
+            )
             x_vals, y_vals = _step_xy(envelope, envelope.center)
+            # Always draw smooth line (solid)
+            ax.plot(envelope.x, envelope.center, color=color, linewidth=2.0, alpha=0.95)
+            # Also draw step function (dashed) when bins available
             if _step_has_bins(envelope) and _use_step_style(bundle):
-                ax.step(x_vals, y_vals, where="post", color=color, linewidth=2.0, alpha=0.95)
-            else:
-                ax.plot(envelope.x, envelope.center, color=color, linewidth=2.0, alpha=0.95)
+                ax.step(
+                    x_vals,
+                    y_vals,
+                    where="post",
+                    color=color,
+                    linewidth=1.5,
+                    alpha=0.55,
+                    linestyle="--",
+                )
         else:
             first = grouped_series[0]
             x_vals, y_vals = _step_xy(first, first.center)
+            # Always draw smooth line (solid)
+            ax.plot(first.x, first.center, color=color, linewidth=2.0, alpha=0.95)
+            # Also draw step function (dashed) when bins available
             if _step_has_bins(first) and _use_step_style(bundle):
-                ax.step(x_vals, y_vals, where="post", color=color, linewidth=2.0, alpha=0.95)
-            else:
-                ax.plot(first.x, first.center, color=color, linewidth=2.0, alpha=0.95)
+                ax.step(
+                    x_vals,
+                    y_vals,
+                    where="post",
+                    color=color,
+                    linewidth=1.5,
+                    alpha=0.55,
+                    linestyle="--",
+                )
 
     if bundle.observable_type.startswith("double_ratio"):
         kind_rank = {"sys": 0, "stat": 1, "total": 2}
         ordered = sorted(
             bundle.experimental_series,
-            key=lambda series: kind_rank.get(getattr(series, "uncertainty_kind", "total"), 2),
+            key=lambda series: kind_rank.get(
+                getattr(series, "uncertainty_kind", "total"), 2
+            ),
         )
         for exp in ordered:
             marker = _marker_for_experiment(exp.experiment)
@@ -591,7 +703,9 @@ def _apply_publication_style(ax, bundle: ObservableReferenceBundle) -> None:
     ax.set_ylabel(_y_label(bundle))
     ax.axhline(1.0, color="0.55", linewidth=0.8, linestyle=":")
     ax.grid(alpha=0.18, linewidth=0.8)
-    if bundle.observable_type.endswith("_vs_npart") or bundle.observable_type.endswith("_vs_pt"):
+    if bundle.observable_type.endswith("_vs_npart") or bundle.observable_type.endswith(
+        "_vs_pt"
+    ):
         ax.set_xlim(left=0.0)
     if bundle.observable_type.endswith("_vs_npart"):
         xmax = _theory_support_xmax(bundle.theory_series)
@@ -600,7 +714,11 @@ def _apply_publication_style(ax, bundle: ObservableReferenceBundle) -> None:
     if bundle.observable_type == "RAA_vs_npart":
         ax.set_ylim(0.0, 1.0)
     elif bundle.observable_type == "RAA_vs_pt":
-        pt_max = 10.0 if bundle.system == "AuAu" and bundle.energy_label == "200 GeV" else 30.0
+        pt_max = (
+            10.0
+            if bundle.system == "AuAu" and bundle.energy_label == "200 GeV"
+            else 30.0
+        )
         ax.set_xlim(0.0, pt_max)
         ax.set_ylim(0.0, 0.75)
     elif bundle.observable_type == "RAA_vs_y":
@@ -624,7 +742,12 @@ def _apply_publication_style(ax, bundle: ObservableReferenceBundle) -> None:
         va="top",
         ha="left",
         fontsize=10.5,
-        bbox={"boxstyle": "round,pad=0.25", "facecolor": "white", "alpha": 0.85, "edgecolor": "0.85"},
+        bbox={
+            "boxstyle": "round,pad=0.25",
+            "facecolor": "white",
+            "alpha": 0.85,
+            "edgecolor": "0.85",
+        },
     )
 
 
@@ -717,9 +840,13 @@ def _add_publication_legends(fig, ax, bundle: ObservableReferenceBundle) -> None
             )
         )
     for experiment in experiments:
-        series_for_exp = [s for s in bundle.experimental_series if s.experiment == experiment]
+        series_for_exp = [
+            s for s in bundle.experimental_series if s.experiment == experiment
+        ]
         marker = _marker_for_experiment(experiment)
-        if series_for_exp and all(getattr(s, "upper_limit", False) for s in series_for_exp):
+        if series_for_exp and all(
+            getattr(s, "upper_limit", False) for s in series_for_exp
+        ):
             marker = "v"
         label = experiment
         if any(getattr(s, "combined_state", False) for s in series_for_exp):
@@ -856,6 +983,15 @@ def save_system_summary(
         figure_pdf = artifact.get("figure_pdf")
         figure_png = artifact.get("figure_png")
 
+        def _path_ref(value: object | None) -> str | None:
+            if not value:
+                return None
+            path = Path(value)
+            try:
+                return str(path.relative_to(REPO_ROOT))
+            except ValueError:
+                return str(path)
+
         observable_entry = {
             "observable_id": bundle.observable_id,
             "observable_type": bundle.observable_type,
@@ -865,7 +1001,9 @@ def save_system_summary(
             "issues": list(bundle.issues),
             "theory_sources": list(bundle.theory_sources),
             "datafile_sources": list(bundle.datafile_sources),
-            "theory_series_labels": sorted({series.series_label for series in bundle.theory_series}),
+            "theory_series_labels": sorted(
+                {series.series_label for series in bundle.theory_series}
+            ),
             "experimental_series": [
                 {
                     "experiment": series.experiment,
@@ -878,9 +1016,9 @@ def save_system_summary(
                 }
                 for series in bundle.experimental_series
             ],
-            "manifest": str(Path(artifact["manifest"]).relative_to(REPO_ROOT)) if artifact.get("manifest") else None,
-            "figure_pdf": str(Path(figure_pdf).relative_to(REPO_ROOT)) if figure_pdf else None,
-            "figure_png": str(Path(figure_png).relative_to(REPO_ROOT)) if figure_png else None,
+            "manifest": _path_ref(artifact.get("manifest")),
+            "figure_pdf": _path_ref(figure_pdf),
+            "figure_png": _path_ref(figure_png),
         }
         observables.append(observable_entry)
         unique_issues.update(bundle.issues)
@@ -889,12 +1027,18 @@ def save_system_summary(
         "system": first_bundle.system,
         "energy_label": first_bundle.energy_label,
         "observable_count": len(bundle_list),
-        "comparison_count": sum(bundle.category == "comparison" for bundle in bundle_list),
-        "theory_only_count": sum(bundle.category == "theory_only" for bundle in bundle_list),
+        "comparison_count": sum(
+            bundle.category == "comparison" for bundle in bundle_list
+        ),
+        "theory_only_count": sum(
+            bundle.category == "theory_only" for bundle in bundle_list
+        ),
         "issues": sorted(unique_issues),
         "observables": observables,
     }
-    summary_json_path.write_text(json.dumps(summary_payload, indent=2, sort_keys=True) + "\n")
+    summary_json_path.write_text(
+        json.dumps(summary_payload, indent=2, sort_keys=True) + "\n"
+    )
 
     with summary_csv_path.open("w", newline="") as handle:
         writer = csv.DictWriter(
