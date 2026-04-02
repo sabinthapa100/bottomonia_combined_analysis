@@ -191,48 +191,34 @@ def read_oo_datafile(datafile: str, logger: logging.Logger) -> np.ndarray:
                 i += 2
 
     elif ncols_data == 14:
-        # wReg format: 4-row records (meta+data1, meta+data2)
-        # data1: 14 cols — first 6 are S-wave survival (v1-v6)
-        # data2: 14 cols — may contain P-wave or regeneration info
+        # wReg format: 4-row records.
+        # Structure: (meta, data, meta_copy, data_zero)
+        # data (first data row) 14 columns:
+        #   cols 0-5:  direct evolution survival (6 states)
+        #   cols 6-11: regeneration contribution (6 states)
+        #   col 12:    qweight
+        # Total R_AA = cols 0-5 + cols 6-11
+        # data_zero (second data row) is mostly zeros — ignore it.
         i = 0
         while i < len(lines) - 3:
             m1 = lines[i].split()
             d1 = lines[i + 1].split()
-            m2 = lines[i + 2].split()
-            d2 = lines[i + 3].split()
 
-            if len(m1) != 7 or len(d1) != 14 or len(m2) != 7 or len(d2) != 14:
+            if len(m1) != 7 or len(d1) != 14:
                 i += 1
                 continue
 
-            s_data = [float(x) for x in d1[:6]]
-            p_data = [float(x) for x in d2[:6]]
-            s_meta = [float(x) for x in m1]
-
-            # Combine S-wave from data1 and P-wave from data2
-            # If P-wave data is all zero, just use S-wave
-            if abs(p_data[2]) > 0.001 or abs(p_data[4]) > 0.001:
-                surv6 = np.array(
-                    [
-                        s_data[0],
-                        s_data[1],
-                        p_data[2],
-                        s_data[3],
-                        p_data[4],
-                        s_data[5],
-                    ],
-                    dtype=np.float64,
-                )
-            else:
-                surv6 = np.array(s_data, dtype=np.float64)
-
+            meta = [float(x) for x in m1]
+            direct = np.array([float(x) for x in d1[:6]], dtype=np.float64)
+            regen = np.array([float(x) for x in d1[6:12]], dtype=np.float64)
+            surv6 = direct + regen
             qweight = float(d1[12]) if len(d1) > 12 else 1.0
 
             obs_list.append(
                 {
                     "surv6": surv6,
-                    "pt": s_meta[4],
-                    "y": s_meta[6],
+                    "pt": meta[4],
+                    "y": meta[6],
                     "qweight": qweight,
                 }
             )
