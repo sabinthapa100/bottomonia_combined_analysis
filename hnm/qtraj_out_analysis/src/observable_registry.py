@@ -745,7 +745,7 @@ OBSERVABLE_REGISTRY: Dict[str, TheoryObservableSpec] = {
                     ),
                 ),
                 upper_limit=True,
-                note="95% CL interval.",
+                note=None,
             ),
             ExperimentalObservableSpec(
                 experiment="ATLAS",
