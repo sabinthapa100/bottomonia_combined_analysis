@@ -1,0 +1,42 @@
+# Large Input/Data Files (CRITICAL for a ~9.0G input directory)
+inputs/
+outputs/
+cnm/quenching_integration
+agents
+hnm/tamu-traj
+hnm/trajectorysampler-pA
+hnm/trajectorysampler
+hnm/regeneration
+cnm/eloss_code/arleopeigne_ref
+cnm/eloss_code/arleopeigne_ref
+cnm/eloss_code/eloss_code
+cnm/eloss_code/testing
+cnm/eloss_code/refs
+inputs/npdf/nPDFs/
+inputs/npdf/pPb5TeV
+inputs/npdf/pPb8TeV
+inputs/primordial
+
+# Output and Results Files
+output*/
+Output/
+
+# Intermediate/Temporary Files and Caches
+.ipynb_checkpoints
+__pycache__/
+*.pyc
+.vscode
+.venv
+.agent
+.DS_Store
+*~
+*.swp
+*.tar.xz
+*.pdf
+*.png
+*.jpeg
+.pytest_cache
+
+# Local environments and LaTeX build artifacts
+.conda/
+hnm/qtraj-nlo/input/

@@ -1,0 +1,2110 @@
+\documentclass[times,sort&compress,final]{elsarticle}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+}
+\usepackage{dirtree}
+
+\urlstyle{same}
+
+%% Stylefile to load CPC template
+\usepackage{cpc}
+\usepackage{framed,multirow}
+\usepackage{nameref}
+
+\usepackage[labelfont=bf,justification=justified,singlelinecheck=true]{caption}
+%\captionsetup[figure]{name=Fig. ,labelsep=period}
+%\captionsetup[table]{labelsep=newline,font=footnotesize}
+
+%% symbols and special math commands
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{amssymb}
+\usepackage{commath}
+\usepackage{latexsym}
+\usepackage{braket}
+\DeclareMathOperator{\arcsinh}{arcsinh}
+
+% Following three lines are needed for this document.
+% If you are not loading colors or url, then these are
+% not required.
+\usepackage{url}
+\usepackage[table]{xcolor}
+\newcommand{\redflag}[1]{{\color{red} #1}}
+\newcommand{\fr}[2]{{\frac{#1}{#2}}}
+
+% table cell coloring
+%\usepackage[table]{xcolor}% http://ctan.org/pkg/xcolor
+
+% stuff for listing of code
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{verbatimbox}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.97,0.97,0.97}
+
+\lstdefinestyle{myCPPstyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                                  
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    language=C++,
+    numbers=none, 
+    xleftmargin=5mm, 
+    xrightmargin=5mm
+}
+\lstset{style=myCPPstyle}
+
+\lstdefinestyle{myBASHstyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                                  
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    language=bash,
+    numbers=none, 
+    xleftmargin=5mm, 
+    xrightmargin=5mm
+}
+
+% file listing block
+\usepackage{tikz}
+\usepackage[english]{babel}
+\usepackage{blindtext}
+\definecolor{light-gray}{gray}{0.97}
+\newcommand{\listingbox}[1]{%
+         \begin{center}%
+            \begin{tikzpicture}%
+                \node[rectangle, draw=gray, fill=light-gray, inner xsep=5pt, inner ysep=6pt, outer ysep=10pt]{
+                \begin{minipage}{0.85\linewidth}#1\end{minipage}};%
+            \end{tikzpicture}%
+         \end{center}%
+}
+  
+% new commands
+\def\qtraj{{\tt QTraj} }
+\def\ba{\begin{eqnarray}}
+\def\ea{\end{eqnarray}}
+\def\be{\begin{equation}}
+\def\ee{\end{equation}}
+\def\als{\alpha_{\rm s}}
+
+\journal{Computer Physics Communications}
+
+\begin{document}
+
+\verso{Ba Omar \textit{etal}}
+
+\begin{frontmatter}
+
+\title{QTRAJ 1.0:  A Lindblad equation solver for heavy-quarkonium dynamics}
+
+\author[1]{Hisham \snm{Ba Omar}}
+\author[2]{Miguel \'{A}ngel \snm{Escobedo}}
+\author[1]{Ajaharul \snm{Islam}}
+\author[1]{Michael \snm{Strickland}\corref{cor1}
+\cortext[cor1]{Corresponding author: mstrick6@kent.edu }}
+\author[1]{Sabin \snm{Thapa}}
+\author[3]{Peter \snm{Vander Griend}}
+\author[4]{Johannes Heinrich \snm{Weber}}
+
+\address[1]{Department of Physics, Kent State University, Kent, OH 44242, United States}
+\address[2]{Instituto Galego de F\'{i}sica de Altas Enerx\'{i}as (IGFAE), Universidade de Santiago de Compostela. E-15782, Galicia, Spain}
+\address[3]{Physik-Department, Technische Universit\"{a}t M\"{u}nchen, James-Franck-Str. 1, 85748 Garching,
+Germany}
+\address[4]{Institut f\"ur Physik, Humboldt-Universit\"at zu Berlin \& IRIS Adlershof, D-12489 Berlin, Germany}
+
+\received{In the future}
+\finalform{In the future}
+\accepted{In the future}
+\availableonline{In the future}
+\communicated{M. Strickland}
+
+\begin{abstract}
+%%%
+We introduce an open-source package called \qtraj that solves the Lindblad equation for heavy-quarkonium dynamics using the quantum trajectories algorithm.  
+The package allows users to simulate the suppression of heavy-quarkonium states using externally-supplied input from 3+1D hydrodynamics simulations.
+The code uses a split-step pseudospectral method for updating the wave-function in between jumps, which is implemented using the open-source multi-threaded FFTW3 package.  
+This allows one to have manifestly unitary evolution when using real-valued potentials.  
+In this paper we provide detailed documentation of \qtraj 1.0, installation instructions, and present various tests amd benchmarks of the code.
+%%%
+\end{abstract}
+
+\begin{keyword}
+% MSC codes here, in the form: \MSC code \sep code
+% or \MSC[2008] code \sep code (2000 is the default)
+\MSC 81V05\sep 46N50\sep 37N20\sep 82D10
+% Keywords
+\KWD Heavy Quarkonium \sep Open Quantum Systems \sep Lindblad Equation \sep Quantum Trajectories Algorithm
+\end{keyword}
+
+\end{frontmatter}
+
+%% main text
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+\label{sec:intro}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Quantum Chromodynamics (QCD) is the quantum field theory that describes the strong nuclear force. 
+The degrees of freedom contained in the QCD Lagrangian are quarks and gluons, which are collectively called partons.  
+At low temperatures ($T \lesssim 2 \times 10^{12}$ K), partons are confined inside hadrons such as protons and neutrons and, as a result, they are never observed in isolation. 
+At temperatures higher than this threshold or, alternatively, at sufficiently high baryon density, QCD predicts a phase transition to a deconfined quark-gluon plasma (QGP) \cite{Bazavov:2013txa,Borsanyi:2016bzg,Bazavov:2020teh}. 
+The QGP can be studied on Earth by performing ultrarelativistic collisions of heavy ions, such as lead or gold, with ongoing experiments being performed at both the Relativistic Heavy Ion Collider at Brookhaven National Laboratory and the Large Hadron Collider at the European Organization
+for Nuclear Research (CERN)~\cite{Averbeck2015,Busza:2018}. 
+
+In practice, it is very challenging to extract dynamical information about the QGP from experimental data since this new state of matter exists for only a very short time after the collision, $t_\text{QGP} \lesssim 15\ \text{fm/c}$. 
+It was theorized in \cite{Matsui:1986dk,Karsch:1987pv} that heavy quarkonium, a colorless bound state of two heavy quarks, melts inside of the QGP and, therefore, quarkonium suppression in heavy-ion collisions could be used as an important signature of the formation of a QGP. 
+%and can be used as a probe of the medium properties.
+The theoretical description of in-medium quarkonium dynamics has changed significantly since these early studies. 
+In the beginning, it was thought that the main phenomenon responsible for quarkonium suppression was color screening. Later, however, other phenomena were identified, which are equally or more important \cite{Laine:2006ns,Strickland:2011mw,Rothkopf:2019ipj,Akamatsu:2020ypb,Rothkopf:2020vfz}. 
+In particular, one finds that collisions between heavy-quark bound states and particles in the medium introduce dispersion, which results in an imaginary contribution to the heavy-quark potential \cite{Laine:2006ns}. 
+In fact, in the small coupling limit, collisions dissociate quarkonium bound states already at low temperatures where screening is not yet relevant. 
+In addition to collisional dissociation, one must also consider recombination \cite{BraunMunzinger:2000px,Thews:2000rj}, a process in which a heavy quark and anti-quark, which could be initially uncorrelated, form a new bound state inside the medium or during late-time hadronic freeze-out.  
+Statistical recombination is potentially very important for charm quarks, since they are more copiously produced in heavy-ion collisions, however, it is expected to be less important for bottom quarks~\cite{Emerick:2011xu}; however, local quantum regeneration could also play a role.
+
+As a result, we need a theoretical description that can self-consistently include all three of these mechanisms.
+In recent years, there have been many advances in the application of the open quantum system formalism to heavy quarkonium dynamics \cite{Borghini:2011ms,Akamatsu:2012vt,Akamatsu:2014qsa,Blaizot:2015hya,Katz:2015qja,Brambilla:2016wgg,Brambilla:2017zei,Kajimoto:2017rel,Blaizot:2017ypk,Akamatsu:2018xim,Yao:2018nmy,Yao:2018sgn,Blaizot:2018oev,Yao:2020eqy,Yao:2021lus}. 
+In this approach, information about the quantum state of quarkonium is encoded in a reduced density matrix and the equation that describes the evolution of the reduced density matrix is called a master equation. 
+In this paper, we focus on the model developed in \cite{Brambilla:2016wgg,Brambilla:2017zei}. 
+Therein, it was found that, if the temperature $T$ is much larger than the binding energy $E$, the master equation is Markovian. 
+It is a well-known result in the field of open quantum systems that all Markovian evolution equations that conserve the properties of density matrix (trace-preserving, etc.) are Lindblad equations \cite{Gorini:1975nb,Lindblad:1975ef}. 
+In \cite{Brambilla:2016wgg,Brambilla:2017zei} the Lindblad equation was solved numerically in order to obtain phenomenological results. 
+This was done in the following way:
+\begin{itemize}
+\item Expanding the density matrix in spherical harmonics and truncating at a given maximum angular momentum. In this way, the dimensionality of the problem is reduced from three to one dimensions.
+\item Discretizing the one dimensional space on a finite lattice. 
+\item Using the \textit{mesolve} function of the publicly available package QuTiP 2 \cite{qutip1,qutip2}.
+\end{itemize}
+
+However, as the size of the angular momentum basis and one-dimensional lattice used to solve the Lindblad equation become large, a huge amount of computational resources are required. 
+For example, a naive counting indicates that doubling the size of the lattice increases the computational cost by a factor of at least four. 
+This is a well-known problem faced when solving the Lindblad equation and there is large literature on stochastic methods that can be used to reduce the computational cost \cite{Dalibard:1992zz,Molmer:93,Plenio:1997ep,carmichael1999statistical,weissbook,Daley:2014fha}.   
+One of the more popular approaches is the Monte-Carlo wave-function or Quantum Trajectories method, originally developed for applications in quantum optics \cite{Dalibard:1992zz}. 
+In \cite{Brambilla:2020qwo} this method was applied to quarkonium phenomenology and resulted in a substantial reduction in the computational cost.  
+In addition to the reduction in computational cost, another advantage of the quantum trajectories algorithm is that this method does not require truncation in angular momentum.  
+As we will discuss, the most computationally costly operation that appears in the application of the quantum trajectories algorithm to the study of quarkonium suppression is the real-time solution of the Schr\"{o}dinger equation with a non-Hermitian Hamiltonian. Luckily, there is existing literature concerning optimization of this aspect of the calcluation, which can be directly applied to this problem \cite{Boyd:2019arx,Islam:2020gdv,Islam:2020bnp}.
+
+In \cite{Brambilla:2020qwo}, in order to maximize code efficiency, the computations were performed using graphical processing units (GPUs). 
+In this paper, we introduce a CPU-based code in order to allow the code to be run more easily by practicing scientists. 
+Associated with this paper, the CPU-based code is being made publicly available so that it can be used by others to study in-medium quarkonium suppression and, with some adjustments, similar problems. 
+As detailed below, we achieved high efficiency by combining the quantum trajectories algorithm with the split-step pseudospectral method to compute the evolution of the wave-function subject to a non-Hermitian Hamiltonian.
+We also introduce several optimizations of the code which make the CPU code comparable in speed to the GPU code.
+%Finally, we also discuss the advantages of the quantum trajectory method in a more detailed way than in \cite{Brambilla:2020qwo}.
+
+The paper is organized as follows. In section \ref{sec:downloadandcompile} we describe how to download, compile, and run \qtraj. In section \ref{sec:params} we detail the runtime parameters of the code. In section \ref{sec:algorithm} we provide a brief theoretical background and describe the algorithm as applied to the Lindblad equation studied in \cite{Brambilla:2020qwo}. Key parts of the code are discussed in section \ref{sec:key}. In section \ref{sec:notebooks} we provide instructions for how to analyze the \qtraj output. In section \ref{sec:tests}, we present tests of the code and perform scaling analyses to determine the dependence on the parameters such as lattice size, etc. In section \ref{sec:benchmarks}, we benchmark the code and compare against matrix-based methods for solving the Lindblad equation. Finally, in section \ref{sec:conclusions}, we present our conclusions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Download and compilation of the code}
+\label{sec:downloadandcompile}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{How to download the code}
+\label{subsec:download}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+To download the most up-to-date version of \qtraj, the user can either pull from the public GIT repository
+%
+\begin{verbatim}
+    $ git clone git@bitbucket.org:kentphysics/qtraj-fftw.git
+\end{verbatim}
+%
+or download tagged versions using the URL contained in ref.~\cite{qtraj-download}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Structure of the \qtraj package}
+\label{sec:structure}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+After download, the \qtraj package main folder has the following top-level directory structure
+%
+\listingbox{%
+\dirtree{%
+.1 qtraj-fftw.
+.2 build.
+%.3 include.
+%.3 src.
+.2 docs.
+%.3 latex.
+.2 input.
+%.3 temperature.
+.2 license.
+.2 mathematica.
+.2 scripts.
+.2 test.
+%.3 build.
+%.4 include.
+%.4 src.
+%.3 input.
+%.4 targets.
+%.4 temperature.
+}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Compilation of \qtraj and unit tests}
+\label{subsec:finalcompilation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Once the requisite packages listed in \ref{sec:requirements} have been installed, the user should be able to compile \qtraj by simply typing
+%
+\begin{verbatim}
+    $ make
+\end{verbatim}
+%
+from the main directory.  The user can compile with all cores on their system by adding `{\tt -j}' or specify a given number of cores by adding `{\tt -j \#}'.  Upon successful compilation, an executable called {\tt qtraj} will be generated in the main folder.  The Makefile will automatically detect if the user has MKL installed.  If MKL is installed, the MKL version of the internal eigensolver will be used, otherwise, the Armadillo version will be used.  To reset the build, the user can execute 
+{\tt make clean} from the main directory. Note that it is possible to compile the code without an internal eigensolver by executing {\tt make mode=lightweight} from the main directory.  In this case, runtime numerical determination of the eigenstates is not possible, however, the user can read previously computed eigenstates from disk (see Sec.~\ref{sec:eigensolvers} for more details).
+
+After having compiled the main executable, the user can run unit tests on the code by executing
+%
+\begin{verbatim}
+    $ make tests
+\end{verbatim}
+%
+from the main directory.  Note that this functionality requires the GoogleTest framework to be installed.  See \ref{sec:requirements} for further information.
+
+To run \qtraj using the parms from {\tt input/params.txt}, the user executes
+%
+\begin{verbatim}
+    $ ./qtraj
+\end{verbatim}
+%
+in the directory where the code was compiled.  
+All output from the code will appear either in a directory called {\tt output} or {\tt output-<random-seed>}, depending on the output parameter settings.  
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Code parameters}
+\label{sec:params}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+All runtime parameters for the code can be set by editing the file {\tt input/params.txt}.  Note that parameter values set from the file can be overridden by appending a dash followed by the name of the parameter and the value to use, e.g.
+%
+\listingbox{%
+\tt
+\$ ./qtraj -nTrajectories 16
+}
+%
+would override the parameter {\tt nTrajectories} and set its value to 16, overriding the value indicated in the file {\tt input/params.txt}.  In table \ref{tab:params}, we provide documentation for each runtime parameter.
+\\
+
+\begin{table}
+%The following is a table for group 1 parameters  
+\begin{center}
+{\small 
+\begin{tabular}{|p{0.1\linewidth}|p{0.18\linewidth}|p{0.15\linewidth}|p{0.42\linewidth}|}
+\hline
+\cellcolor{gray!10} \centering {\bf Group} & \cellcolor{gray!10} \centering {\bf Parameter} & \cellcolor{gray!10} \centering {\bf Value/Type} & \cellcolor{gray!10} {\bf Description} \\
+\cline{1-4}
+\centering Potential&\centering potential&\centering 0&Munich potential (\ref{sec:munichpotential})\\
+\cline{3-4}
+\centering parameter&&\centering 1&Isotropic KSU potential (\ref{sec:isoksupotential}) \\ 
+\cline{3-4}
+&&\centering 2&Anisotropic KSU potential (\ref{sec:anisoksupotential})\\ 
+\cline{1-4}
+\centering Jump&\centering doJumps& \centering 1&Perform quantum jumps; only for potential=0\\
+\cline{3-4}
+\centering  parameters&&\centering 0&Do not perform quantum jumps\\
+\cline{2-4}
+&\centering maxJumps& \centering integer $\geq0$ &Maximum number of quantum jumps\\
+\cline{1-4}
+\centering Physics&\centering m&\centering real $\geq0$ &Reduced mass in units of GeV\\ 
+\cline{2-4}
+\centering parameters&\centering alpha&\centering real $\geq0$&Coulomb coupling; $\alpha = C_F \alpha_s $\\
+\cline{2-4}
+&\centering kappa&\centering -1&Central fit (\ref{sec:munichpotential}) \\
+\cline{3-4}
+&&\centering -2&Lower fit (\ref{sec:munichpotential}) \\
+\cline{3-4}
+&&\centering -3&Upper fit (\ref{sec:munichpotential})\\
+\cline{3-4}
+&&\centering real $\geq0$& Coefficient $\hat\kappa$ in Munich potential (\ref{sec:munichpotential})\\
+\cline{2-4}
+&\centering gam&\centering real $\leq$ 0 & Coefficient $\hat\gamma$ in Munich potential (\ref{sec:munichpotential})\\
+\cline{1-4}
+\centering Temperature&\centering temperatureEvolution&\centering 0& Ideal Bjorken evolution; $T(\tau) = T_0 (\tau_{\rm med}/\tau)^{1/3}$\\
+\cline{3-4}
+\centering  parameters&&\centering 1& Read from temperature evolution file (\ref{sec:formats1})\\
+\cline{3-4}
+&&\centering 2& Read from ``trajectory file'' (\ref{sec:formats2})\\
+\cline{2-4}
+&\centering temperatureFile&\centering string&Specifies temperature file path \\
+\cline{2-4}
+&\centering T0&\centering real $>$ 0  &Initial temperature in units of GeV (Bjorken)\\
+\cline{2-4}
+&\centering Tf&\centering 0 $<$ T0 $<$ Tf  & Final temperature in units of GeV\\
+\cline{2-4}
+&\centering tmed&\centering real $\geq0$& Time to turn on hydro background in units of GeV$^{-1}$\\
+\cline{2-4}
+&\centering t0&\centering real $\geq0$& Time to begin vacuum evolution in units of GeV$^{-1}$\\
+\cline{1-4}
+\centering Initial&\centering initType&\centering 0&Singlet Coulomb eigenstates\\
+\cline{3-4}
+\centering condition&&\centering 1& Gaussian delta function\\
+\cline{3-4}
+\centering parameters&&\centering 100& Computed eigenstates (Section \ref{sec:eigensolvers}) \\
+\cline{3-4}
+&&\centering 200 & Loads eigenstates from file (Section \ref{sec:eigensolvers}) \\
+\cline{2-4}
+&\centering ProjType&\centering 0&Uses coulomb eigenstates\\
+\cline{3-4}
+&&\centering 1&Uses computed eigenstates\\
+\cline{3-4}
+&&\centering 2&Uses disk-based eigenstates (Section \ref{sec:eigensolvers})\\
+\cline{2-4}
+&\centering initWidth&\centering real $\geq0$& Initial width for Gaussian IC (initType=1)\\
+\cline{2-4}
+&\centering initN&\centering 1&Principle quantum number $n$; only for initType=0\\
+\cline{2-4}
+&\centering initL&\centering 0 &Angular momentum quantum number $l$\\
+\cline{2-4}
+&\centering initC&\centering 0&Singlet color configuration\\
+\cline{3-4}
+&&\centering 1&Octet color configuration; only for potential=0\\
+\cline{2-4}
+&\centering basisFunctionsFile&\centering string& Specifies basis functions file path (Section \ref{sec:eigensolvers}) \\
+\cline{1-4}
+\centering Simulation&\centering nTrajectories&\centering integer $\geq$ 0 & Number of quantum trajectories to simulate\\
+\cline{2-4}
+\centering parameters&\centering randomseed&\centering 0& Uses high-resolution system timer as a seed\\
+\cline{3-4}
+&&\centering integer $>$ 0& Uses specified number as a seed\\
+\cline{3-4}
+&&\centering -1& Uses deterministic random numbers (for testing)\\
+\cline{2-4}
+&\centering rMax&\centering 0 $<$ real $\leq$ 1 & Sets maximum initial random number (Section \ref{ssec:algo}) \\
+\cline{2-4}
+&\centering maxJumps&\centering integer $\ge$ 0 & Sets maximum number of jumps (Section \ref{ssec:algo}) \\
+\cline{1-4}
+\centering Grid&\centering num&\centering integer $\geq$ 2 & Number of lattice sites; $2^n$ for best performance \\
+\cline{2-4}
+\centering parameters&\centering L&\centering real $>$ 0&Size of simulation box in units of GeV$^{-1}$\\
+\cline{2-4}
+&\centering dt&\centering real $> 0$ & Time step in units of GeV$^{-1}$\\
+\cline{2-4}
+&\centering maxSteps&\centering integer $\geq0$& Maximum number of time steps\\
+\cline{2-4}
+&\centering derivType&\centering 0&Full derivative  (Section \ref{sec:derivativetypes}) \\
+\cline{3-4}
+&&\centering 1&Second-order differences  (Section \ref{sec:derivativetypes}) \\
+\cline{1-4}
+\centering Output&\centering snapFreq&\centering integer $\geq$ 0& Frequency for the summary output\\
+\cline{2-4}
+\centering parameters&\centering snapPts&\centering integer $\leq$ num& For best performance num/snapPts=$2^n$\\
+\cline{2-4}
+&\centering dirnameWithSeed&\centering 0& Output directory ``output''\\
+\cline{3-4}
+&&\centering 1&Output directory ``output-$<$seed$>$''\\
+\cline{2-4}
+&\centering saveWavefunctions&\centering 0&Turns off saving of wavefunctions \\
+\cline{3-4}
+&&\centering 1& Turns on saving of wavefunctions \\
+\cline{2-4}
+&\centering outputSummaryFile&\centering 0& Turns off output of the summary file summary.tsv\\
+\cline{3-4}
+&&\centering 1& Turns on output of the summary file summary.tsv\\
+\hline
+\end{tabular}
+}
+\end{center}
+\vspace{-3mm}
+\caption{Table of \qtraj runtime parameters.  These can be adjusted within the file {\tt input/params.txt} or on the command line (see Sec.~\ref{sec:params}).}
+\label{tab:params}
+\end{table}
+\clearpage
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Using the built-in eigensolvers}
+\label{sec:eigensolvers}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\qtraj includes the ability to determine the vacuum eigenstates numerically based on the potential set using the {\tt potential} parameter.  For this purpose it makes use of either the Intel MKL library \cite{IntelOneAPI} or the Armadillo library \cite{Armadillo} (see \ref{sec:requirements} for details).  To use this feature, the user should use {\tt initType = 100}.  Upon code execution, \qtraj will first determine the eigenstates and output the masses of the 1S, 2S, 2P, 3S, 3P, and 3D states.\footnote{There is an internal variable {\tt nBasis} that can be adjusted to output more angular momentum states.}  These eigenstates will be saved to a file in the output folder called {\tt basisfunctions.tsv}. 
+Once generated, this file can be used to initialize the eigenstate basis.  To do this, the user should copy the {\tt basisfunctions.tsv} file into the {\tt input} folder,  adjust the parameter {\tt basisFunctionsFile} to point to this file, and finally change the parameter {\tt initType} to 200.  This is useful for running \qtraj on machines that do not have either the MKL or Armadillo packages installed.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Derivative types}
+\label{sec:derivativetypes}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+During the $H_{\rm eff}$ evolution of the wave-function the \qtraj code can make use of two different types of kinetic energy operators.  For the case {\tt derivativeType = 0}, the momentum-space representation of the kinetic energy operator $T = p^2/m$ is used, where $m$ is the mass of the heavy quark; $m/2$ is the reduced mass in the heavy quarkonium system.  This is the default setting in \qtraj.  If the user specifies {\tt derivativeType = 1}, then the momentum-space representation of the kinetic energy operator is taken to be of the form $T_{\rm discrete} = 2 [1-\cos(p\Delta r)]/(m\Delta r^2)$, which corresponds to using centered differences to compute the second derivative operator.  This option is less accurate than using the full kinetic energy operator.  It exists in order to allow the user to make easier comparisons to codes that make use of second order differences.  
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Theoretical backgound and description of the algorithm}
+\label{sec:algorithm}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Lindblad equation}
+\label{sec:Lindblad}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+For a wide range of quantum-mechanical applications, we are faced with a 
+Markovian time evolution of a density matrix $\rho$ of a subsystem 
+interacting with an environment that preserves the trace of the subsystem's 
+density matrix. 
+Such a system can be described by the GKSL or Lindblad equation
+\cite{Gorini:1975nb,Lindblad:1975ef}, whose general form is given by 
+\begin{equation}  \frac{d\rho}{dt}=-i[H,\rho]+\sum_n 
+\left(  C_n\,\rho\,C_n^\dagger-\frac{1}{2}\{C_n^\dagger C_n,\rho\} \right).
+\label{eq:Lindblad}
+\end{equation}
+$H$ is a Hermitian Hamilton operator that describes deterministic and unitary time 
+evolution of the subsystem in the presence of the environment, 
+whereas the so-called collapse operators $C_n$ describe processes involving 
+explicit exchanges of quanta between the subsystem and the environment. 
+On the level of the subsystem, these lead to non-unitary time evolution. 
+Defining for those non-unitary interactions partial and total widths
+\begin{equation}
+\Gamma_n=C_n^\dagger C_n\,,\quad 
+\Gamma = \sum\limits_n \Gamma_n\,,
+\label{eq:width}
+\end{equation}
+the Lindblad equation can be reformulated in terms of a non-Hermitian effective 
+Hamiltonian 
+\begin{equation}
+H_\text{eff}=H-\frac{i}{2}\Gamma\,,
+\label{eq:Heff}
+\end{equation}
+that gives rise to non-unitary, but deterministic time evolution, and transitions between  
+different quantum states that are driven by the term $C_n\,\rho\,C_n^\dagger$.
+Rewriting the Lindblad equation as 
+\begin{equation}
+\frac{d\rho}{dt}=-iH_\text{eff}\rho+i\rho H^\dagger_\text{eff}+\sum_n C_n\,\rho \,C_n^\dagger\,,
+\end{equation}
+we are in a position to discretize the time evolution in a form that is 
+in principle amenable to numerical integration, 
+\begin{equation}
+\rho(t+dt) = \rho(t)-iH_\text{eff}\rho(t)dt+i\rho(t)H_\text{eff}^\dagger dt+\sum_n C_n\,\rho(t) \,C_n^\dagger dt\,.
+\label{eq:discLE}
+\end{equation}
+where each discrete step of numerical integration has a diagonal and 
+an off-diagonal component. 
+Due to the linearity of Eq. \eqref{eq:Lindblad}, one may have any pure state 
+as initial condition and average the late time results over different appropriately 
+weighted initial states. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{First principles description of quarkonium using effective field theory}
+\label{sec:1stprinciple}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+A heavy quark-antiquark pair coupled to a hot, nuclear medium can be described using the formalism of Open Quantum Systems 
+applied to the effective field theory (EFT) potential Non-Relativistic QCD (OQS+pNRQCD).
+pNRQCD is obtained from QCD by first integrating out the scale of the heavy-quark mass $m$, leading 
+to Non-Relativistic QCD (NRQCD) \cite{Caswell:1985ui,Bodwin:1994jh,Pineda:1997bj}, and then successively performing a multipole expansion in the 
+relative distance $r$ between the heavy quark and antiquark \cite{Pineda:1997bj, Brambilla:1999xf}. The latter 
+step integrates out the soft scale $1/r \sim mv$ and the resulting EFT describes heavy quark anti-quark pairs in 
+color singlet or octet configurations as well as light quarks and gluons at the ultrasoft scale $\als/r \sim mv^2$. 
+The Wilson coefficients of pNRQCD are functions of $r$, and play the role of potentials, although higher order contributions have non-potential form too.
+The evolution equation for the heavy quarkonia reduced density matrix can be obtained within pNRQCD and cast into Lindblad form as long 
+as the medium's scales are much smaller than the inverse Bohr radius and much larger than the ground state binding 
+energy \cite{Brambilla:2016wgg,Brambilla:2017zei}.  
+For other hierarchies a Lindblad form cannot be obtained. 
+In anticipation of details that we review later, we mention that the problem 
+has radial symmetry if the medium is isotropic. 
+Hence, the internal quanta that are exchanged between the subsystem and the 
+environment relate to the color configuration (singlet or octet) of the heavy 
+quark-antiquark pair and its angular momentum; the deterministic evolution 
+with $H_\text{eff}$ leaves the color state as well as the angular momentum 
+invariant, while the collapse operators change color and angular momentum in 
+a well defined manner.
+For a brief overview of the structure, see section \ref{ssec:OQSpNRQCD}; for 
+hard-coded numerical values of the parameters, see \ref{sec:munichpotential}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Phenomenological descriptions of quarkonium}
+\label{sec:pheno}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Alternatively, one may use a hard-coded, phenomenologically motivated interaction 
+of the heavy quark-antiquark pair.
+A KMS potential ~\cite{Karsch:1987pv, Dumitru:2009ni, Strickland:2011aa} 
+with an imaginary part as dictated by the next-to-leading order result in the 
+electric screening regime ~\cite{Laine:2006ns} is provided in its isotropic 
+(see \ref{sec:isoksupotential}) or anisotropic (see \ref{sec:anisoksupotential}) variants. 
+These phenomenological potentials consider only the color singlet and deterministic 
+evolution with $H_\text{eff}$; there are no collapse operators implemented in the phenomenological models included in this version. 
+We note that it is straightforward to extend the code to include new phenomenological potentials. In addition, it is possible for users to include collapse terms for phenomenologically motivated potentials.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{The Monte-Carlo Wave-Function method}
+\label{ssec:MCWF}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Direct evaluation of Eq. \eqref{eq:discLE} is very demanding and necessarily approximate. 
+Besides the obvious need for a sufficiently fine discretization of time, a 
+discretization of the underlying space on a grid with a finite spacing and 
+a finite box size (or decompostition in terms of a finite number of basis functions) 
+is required. 
+If the interaction is isotropic and central, it is sufficient to discretize the 
+radial direction and treat angular momentum as an internal quantum number. 
+Any numerical implementation of $\rho(t)$ necessitates that the Hilbert space is 
+truncated to a finite set of values of each internal quantum number, among which  
+the system can fluctuate through successive applications of the collapse operators. 
+In \cite{Brambilla:2016wgg,Brambilla:2017zei},  Eq. (\ref{eq:discLE})
+was  solved numerically by considering only $S$- and $P$-wave states. 
+Because the size of the density matrix grows as $N^2$, where $N$ is the product of 
+the number of spatial grid points and of the number of internal quantum states, 
+attempts to push away any of the cutoffs are cut short quickly due to a prohibitive 
+increase in the cost of the numerical integration. 
+
+As usual, the only known escape from this curse of dimensionality is stochastic
+integration. 
+In the literature, various stochastic techniques have been developed to tackle 
+this issue, and they go by the name of \textit{master equation unravelling} (see 
+\cite{Breuer:2002pc} and references therein). 
+One such unravelling, the Quantum State Diffusion \cite{Gisin:1992xc}, has been 
+already applied to the study of quarkonium, see for example the 
+recent papers \cite{Miura:2019ssi,Sharma:2019xum}. 
+
+We use a variant of the Monte-Carlo Wave-Function (MCWF) method \cite{Dalibard:1992zz} that is particularly advantageous for compact in-medium heavy quark-antiquark pairs 
+and makes efficient use of the symmetries of their interactions. 
+In particular, $H_\text{eff}$ is diagonal in the space of internal quantum numbers. 
+We write the density matrix as a linear combination of projection operators 
+$\rho(t) = \sum_{\psi} p_\psi(t) P_\psi$, $P_\psi=\ket{\psi} \bra{\psi}$, 
+where $\psi$ is a multi-index variable characterizing the quantum state; in the case of quarkonium, 
+the angular momentum quantum number $l=0,1,2,\ldots$, the internal quantum number 
+(color $c$, which can be singlet $s$ or octet $o$ -- we do not need to distinguish 
+between the eight different octet states), and the radial dependence need to be specified.
+Assuming azimuthal symmetry of the isotropic medium and the interaction, we can 
+integrate over the azimuthal angle and omit the magnetic quantum number $m$. 
+$p_\psi(t) \ge 0$ are the probabilities for finding the system at time $t$ 
+in the state $\ket{\psi(t)}$ and satisfy $\sum_\psi p_\psi(t) =1$. 
+
+As mentioned earlier, any state of the subsystem at any time $t$ can be understood 
+as a superposition of initial pure states that have been evolved to time $t$. 
+For that reason, it is sufficient to consider Eq. \eqref{eq:discLE} for the progression 
+of a pure state $\ket{\psi(t)}$ with density matrix 
+$\rho(t) = \ket{\psi(t)}\bra{\psi(t)}$ 
+by one time step $dt$:
+\begin{align}
+\rho(t+dt) 
+& = (1-iH_\text{eff}dt)\ket{\psi(t)}\bra{\psi(t)}
+  +i\ket{\psi(t)}\bra{\psi(t)}H_\text{eff}^\dagger dt
+  +\sum_n C_n\,\ket{\psi(t)}\bra{\psi(t)} \,C_n^\dagger dt\nonumber \\
+& = (1-\bra{\psi(t)}\Gamma\ket{\psi(t)} dt) \, 
+  \frac{(1-iH_\text{eff}dt)\ket{\psi(t)}\bra{\psi(t)}(1+iH_\text{eff}^\dagger dt)}
+  {(1-\bra{\psi(t)}\Gamma\ket{\psi(t)} dt)} 
+\nonumber \\& 
+  + \sum_n\langle\psi(t)|\Gamma_n|\psi(t)\rangle dt \, \frac{C_n\,\ket{\psi(t)}\bra{\psi(t)} \,C_n^\dagger dt}{\langle\psi(t)|\Gamma_n|\psi(t)\rangle dt}+\mathcal{O}(dt^2)\,.
+\label{eq:evol}
+\end{align}
+The expectation value of the total width $\Gamma$ for the time evolved state $\ket{\psi(t)}$ at time $t$, 
+\begin{equation}
+\Gamma(t) \equiv \bra{\psi(t)}\Gamma\ket{\psi(t)} \ge 0 \, ,    
+\end{equation}
+can be used to define probabilities for two different modes of evolution in a single time step\footnote{
+$dt$ can always be chosen small enough such that $\Gamma(t) dt \le 1$}, either by deterministic, 
+non-unitary evolution, or by a quantum jump. 
+The stochastic pattern of both types of intermittent evolution characterize each quantum trajectory $\ket{\psi(t)}$. 
+
+
+How many such trajectories $\ket{\psi(t)}$ are required to achieve sufficient statistical coverage 
+of the ensemble strongly depends on the problem in question; see Section \ref{sec:benchmarks} for a discussion 
+of the required number of trajectories.
+Although the number of necessary trajectories may be large for any generic observable, there are usually 
+many observables of interest for which importance sampling can be applied in a rather straightforward 
+fashion to obtain accurate predictions with a much smaller number of trajectories. 
+The MCWF method may offer computational advantages compared to the direct evolution of the density matrix. 
+First and foremost, the trajectories are completely independent of each other and their computation is 
+embarrassingly parallel. 
+Second, the problem size for computing any individual trajectory scales only linearly and only with the 
+number of spatial grid points, but not with the internal quantum numbers. 
+Although the number of angular momentum or internal quantum states influences the necessary number of trajectories, importance 
+sampling techniques or physically sensible restrictions to the simulation parameters could have a strong limiting effect. 
+Lastly, the MCWF method does not require an artificial truncation of the angular momentum or internal quantum numbers. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{The waiting time approach}
+\label{ssec:WTA}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The main drawback of the naive implementation of the MCWF evolution, Eq. \eqref{eq:evol} is that jumps take a finite amount of time, $dt$, which 
+is the same amount as one step in the time discretization of the deterministic evolution with $H_\text{eff}$. 
+As such, the time between jumps would be systematically underestimated. 
+We use instead the waiting time approach (see \cite{Daley:2014fha} and references therein) in the numerical implementation of the MCWF method, since it treats the quantum jumps as instantaneous. 
+
+We always consider a normalized, pure initial state $\ket{\psi(t_i)}$ in the 
+waiting time approximation. 
+The probability $p_j(t_{i+1},t_{i+1}+\delta t)$ that the next consecutive jump 
+occurs in the interval $[t_{i+1},t_{i+1}+\delta t]$ is given by the difference 
+of probabilities $p_{nj}(t_{i+1})-p_{nj}(t_{i+1}+\delta t)$ that 
+no jump occurs until $t_{i+1}$ or $t_{i+1}+\delta t$, respectively. 
+It can be linearized in terms of the jump rate 
+$R_\text{Jump}(t_{i+1})$ as 
+\begin{align}
+\int_{t_{i+1}}^{t_{i+1}+\delta t} \hskip-2em dt^\prime  R_\text{Jump}(t^\prime)
+&=R_\text{Jump}(t_{i+1})\, \delta t + \mathcal{O}(\delta t^2)
+= p_\text{Jump}(t_{i+1},t_{i+1}+\delta t) 
+=  p_\text{NoJump}(t_{i+1}) -p_\text{NoJump}(t_{i+1}+\delta t) 
+\nonumber\\
+&= -\frac{d p_\text{NoJump}(t_{i+1})}{d t_{i+1}}\, \delta t + \mathcal{O}(\delta t^2)\,.
+\end{align}
+The probability that no jump has occurred and only deterministic, non-unitary evolution with $H_\text{eff}$ 
+has taken place from time $t_{i}$ to $t_{i+1}$ is given by the norm of the state evolved just with 
+$H_\text{eff}$ to time $t_{i+1}$ 
+\begin{equation}
+p_\text{NoJump}(t_{i+1}) 
+= \bra{\psi(t_i)} e^{+i\int_{t_{i}}^{t_{i+1}}dt^\prime H_\text{eff}^\dagger} 
+e^{-i\int_{t_{i}}^{t_{i+1}} dt^\prime H_\text{eff}}\ket{\psi(t_i)}
+= \abs{\ket{\psi(t_i+1)}}^2, 
+\quad 
+\ket{\psi(t_{i+1}) } \equiv e^{-i\int_{t_i}^{t_{i+1}}\,dt'H_\text{eff}(t')} \ket{ \psi(t_i)}. 
+\label{eq:wta evol}
+\end{equation}
+Then we obtain the jump rate $R_\text{Jump}(t_{i+1})$ at time $t_{i+1}$ as the derivative of the norm. 
+It can be related to the expectation value of the width $\Gamma$ for the state at time $t_{i+1}$ by 
+taking the derivative of Eq. \eqref{eq:wta evol},
+\begin{align}
+R_\text{Jump}(t_{i+1}) 
+= - \frac{d p_\text{NoJump}(t_{i+1}) }{d t_{i+1}}
+= -\frac{d \abs{ \ket{ \psi(t_{i+1})} }^2 }{d t_{i+1}}
+= \bra{\psi(t_{i+1})} \Gamma \ket{ \psi(t_{i+1})}
+= \Gamma(t_{i+1}).
+\label{eq:wta}
+\end{align}
+The main advantage of the waiting time approach related to the instantaneousness of the jumps is that the time 
+interval size $\delta t$ that is related to the jumps can be chosen independently from the time interval $dt$ that 
+is related to the evolution with $H_\text{eff}$, and thus determines the numerical error due to the finite time discretization.  
+
+A simple way to obtain the distribution in Eq.~\eqref{eq:wta} is to generate one uniformly distributed 
+random number $r_i \in [0,1]$ for each $t_i$, and evolve with $H_\text{eff}$ until 
+$ \abs{ \psi(t_{i+1}) }^2 \le r_i$. 
+At this time a jump occurs, and yet one or more random numbers $r_i^\prime \in [0,1]$ may be required to determine 
+which collapse operators are applied in the jump. 
+The jumped state at time $t_{i+1}$ is normalized again and becomes the new initial state,
+\begin{equation}
+\ket{ \lambda(t_{i+1})} 
+= \frac{\sum_n C_n\ket{ \psi(t_{i+1})}}{\sqrt{\abs{\sum_n C_n\ket{ \psi(t_{i+1})}}^2 }}, 
+~\text{with summation over all contributing collapse operators}.
+\end{equation}
+A new random number $r_{i+1}$ is drawn and the cycle restarts from $\ket{\psi(t_{i+1}) }$ 
+as the new initial state that is being time evolved with $H_\text{eff}$ until it jumps. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Algorithm for deterministic evolution between quantum jumps}
+\label{sec:splitstep}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+For the deterministic evolution of the wave-function between jumps, we use a 
+split-step pseudospectral or Strang splitting method \cite{Fornberg:1978,TAHA1984203,Boyd:2019arx}. 
+Due to the radial symmetry of the underlying potentials, one may compute 
+the deterministic evolution of a state with any given angular momentum $l$ and 
+internal (color $c$) quantum number using 
+\begin{equation}
+u(r,t + dt) = \exp(- i H_{\text{eff}} dt) u(r,t) \, ,
+\label{eq:uUpdate}
+\end{equation}
+where $u(r,t) = rR(r,t)$ with $R(r,t)$ being the radial part of the wave-function.  
+The effective Hamiltonian $H_\text{eff}$ contains the angular momentum term and a 
+genuine potential which depends on the internal (color) quantum number.  
+For the normalization of the various states, we take
+\begin{equation}
+\frac{\texttt{L}}{\texttt{NUM}}\sum_{r=1}^{\texttt{NUM}} u^*(r,t) u(r,t) = 1 \, .
+\label{eq:normcond}
+\end{equation}
+We enforce the boundary condition on $u(r,t)=0$ at the origin through a real-valued 
+Fourier sine series in a domain $r \in (0,{\texttt{L}}]$ to describe both the real 
+and imaginary parts of the wave-function. 
+To perform the update specified in Eq.~\eqref{eq:uUpdate}, we split the Hamilton operator 
+into its kinetic and effective potential parts $H_\text{eff} = T_\text{kin} +  V_\text{eff}$; 
+the entire dependence on angular momentum $l$ and internal (color $c$) quantum numbers and the non-hermiticity are in the effective potential term $V_\text{eff}$.
+We use the Baker-Campbell-Hausdorff theorem to approximate
+\begin{equation}
+\exp\left[- i H_\text{eff} dt\right] \simeq \exp\left[- i V_\text{eff} \frac{dt}{2} \right] \exp\left[- i T_\text{kin} dt\right]  \exp\left[- i V_\text{eff} \frac{dt}{2} \right] + \mathcal{O}(dt^2) \, .
+\end{equation}
+The resulting sequence for a single time step of deterministic evolution is: 
+\begin{enumerate}
+	\item Update in configuration space using a half-step: $ \psi_1 = \exp\left[- i V_\text{eff} \frac{dt}{2} \right] \psi_0$.
+	\item Separately Fourier sine transform real and imaginary parts: $\tilde\psi_1 = \mathbb{F}_s[\Re \psi_1] + i \mathbb{F}_s[\Im \psi_1] $.
+	\item Update in momentum space using: $\tilde\psi_2 =  \exp\left[- i T_\text{kin} dt\right] \tilde\psi_1$.
+	\item Separately inverse Fourier sine transform real and imaginary parts: $\psi_2 = \mathbb{F}_s^{-1}[\Re \tilde\psi_2] + i \mathbb{F}_s^{-1}[\Im \tilde\psi_2] $.
+	\item Update in configuration space using a half-step: $ \psi_3 = \exp\left[- i V_\text{eff} \frac{dt}{2} \right] \psi_2$.
+\end{enumerate}
+For real valued potentials, the Strang splitting would lead to manifestly unitary evolution.
+In order to evaluate operators in momentum space, we use the Fourier sine 
+transform ($\mathbb{F}_s$) and inverse Fourier sine transform 
+($\mathbb{F}_s^{-1}$) provided by the FFTW3 package \cite{FFTW}.
+The default implementation of the momentum-space operator is $T_\text{kin} = p^2/m$; however, 
+there is an alternative implementation of the second derivative via centered discrete 
+differences, $T_\text{kin,disc} = 2[1-\cos(p dr)]/(m \, dr^2)$ (see Sec. \ref{sec:derivativetypes}).  
+
+We note that a major benefit of the DST algorithm is that, when using the full derivative operator, $T_\text{kin}$, the derivatives are effectively computed using all 
+points in the lattice, not just a fixed subset of points. 
+As a result, the evolution obtained using the DST algorithm is more accurate than would be obtained using, for example, a Crank-Nicolson (CN) scheme with a three-point second-derivative \cite{Boyd:2019arx}.  
+Using the same sized derivative stencil as the default DST algorithm, the CN scheme scales as ${\cal O}(N^2)$ where $N$ is the number of lattice points in the wave-function, whereas the split-step DST evolution scales as ${\cal O}(N \log N)$~\cite{Boyd:2019arx}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{In-medium quarkonium evolution in OQS+pNRQCD}
+\label{ssec:OQSpNRQCD}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In the following let us review the ingredients of the master equation obtained from OQS+pNRQCD 
+\cite{Brambilla:2016wgg,Brambilla:2017zei} at order $\mathcal{O}(r^2)$ and leading order in $E/T$, i.e. for compact, Coulombic quarkonia in the regime $1/a_0 \gg T,m_D\gg E$, for which the master 
+equation has Lindblad form.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Hamiltonian in OQS+pNRQCD }
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In this regime, the Hamiltonian at order $\mathcal{O}(r^2)$ is given as 
+\begin{equation}
+H = \left(\begin{array}{c c}
+h_s & 0\\
+0 & h_o
+\end{array}\right)
++ \frac{r^2}{2}\,\gamma\, 
+\left(\begin{array}{c c}
+1 & 0\\
+0 & \frac{N_c^2-2}{2(N_c^2-1)}
+\end{array}\right)\,,
+\label{eq:hamiltonian}
+\end{equation}
+where $h_{s,o}$ is the in-vacuum Hamiltonian of a singlet or an octet in pNRQCD \cite{Pineda:1997bj,Brambilla:1999xf}:
+\begin{equation}
+h_{s,o} = \frac{{\bf p}^2}{m} +V_{s,o}(r)\,.
+\label{eq:hsoCoul}
+\end{equation}
+Since we assume that the quarkonium is in a Coulombic bound state, the potential $V_{s,o}(r)$ in Eq. \eqref{eq:hsoCoul} 
+is the Coulomb potential in the color singlet (attractive, $V_s(r) =-C_F\, \als/r$) or color octet (repulsive, 
+$V_s(r) =+1/(2N_c)\, \als/r$) representation. 
+In writing Eq. \eqref{eq:hamiltonian} we have assumed a component structure of the quarkonium state 
+as $ \ket{ \psi} = ( \ket{S} , \ket{O} )^T$. 
+
+The coefficient $\gamma$ of the order $\mathcal{O}(r^2)$ term in Eq. \eqref{eq:hamiltonian} is the dispersive 
+counterpart of the temperature dependent heavy-quark momentum diffusion coefficient. 
+It enters by matching pNRQCD with QCD.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Collapse operators, partial widths and color state transitions in OQS+pNRQCD}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+There are six collapse operators: $C^0_i$ and $C^1_i$ (the spatial index $i$ 
+corresponds to the spatial directions and assumes values 1,2,3).
+The $C^0_i$ induce transitions between singlet and octet states, while the $C^1_i$ induce 
+transitions among octet states.
+They read
+\begin{equation}
+C^0_i=\sqrt{\frac{\kappa}{N_c^2-1}}\,r^i\left(\begin{array}{c c}
+0 & 1\\
+\sqrt{N_c^2-1} & 0
+\end{array}\right)\,,\quad
+C^1_i=\sqrt{\frac{(N_c^2-4)\kappa}{2(N_c^2-1)}}\,r^i\left(\begin{array}{c c}
+0 & 0\\
+0 & 1
+\end{array}\right)\,.
+\label{eq:collapse}
+\end{equation}
+The coefficient $\kappa$ is the usual heavy-quark momentum diffusion 
+coefficient ~\cite{CasalderreySolana:2006rq,CaronHuot:2007gq};
+like its dispersive counterpart $\gamma$, it enters by matching pNRQCD with QCD.
+
+Two partial decay widths (cf. Eq. \eqref{eq:width}) are defined through the collapse operators
+\begin{equation}
+\Gamma^0=\sum_i \kappa r^i\left(\begin{array}{c c}
+1 & 0\\
+0 &\frac{1}{N_c^2-1}
+\end{array}\right)r^i\,,\quad
+\Gamma^1=\sum_i \frac{\kappa(N_c^2-4)}{2(N_c^2-1)}r^i\left(\begin{array}{c c}
+0 & 0\\
+0 & 1
+\end{array}\right)r^i\,.
+\end{equation}
+Their sum gives the total decay width,
+\begin{equation}
+\Gamma=\sum_i \kappa r^i\left(\begin{array}{c c}
+1 & 0\\
+0 & \frac{N_c^2-2}{2(N_c^2-1)}\end{array}\right)r^i\,.
+\end{equation}
+
+The probability of color transitions is more simple than for angular momentum. 
+Singlet states can only jump to octet states: $p_{s \to o}= 1$. 
+Octet states have a probability $p_{o \to o}=(N_c^2-4)/(N_c^2-2)$ to jump among themselves\footnote{
+This ratio is obtained by comparing the expectation value of the partial width 
+$\Gamma^1$ to the that of the total width for any octet state.}; otherwise, with probability $p_{o\to s}=2/(N_c^2-2)$, they jump to singlet states.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Structure of the density matrix}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Let us examine the general structure of the density matrix $\rho$ for any operator $H_\text{eff}$ 
+that is diagonal (i.e. depends only on $r=\sqrt{\bm{r}^2}$) in the angular momentum quantum 
+number $l$  and all internal quantum numbers $c$ (i.e. color in OQS+pNRQCD). 
+Then radial and angular parts of the wave-functions can be separated multiplicatively; the 
+latter is given in terms of spherical harmonics. 
+Any density matrix can be expanded on the sphere in terms of spherical harmonics as 
+\begin{equation}
+\rho_{lm;l^\prime m^\prime } \propto \int\,d\Omega(\hat{r})\,d\Omega(\hat{r}^\prime ) \, Y_{lm}^{\phantom{\ast}}(\hat{r}) \, \rho \, Y_{l^\prime m^\prime }^\ast(\hat{r}^\prime )\,.
+\end{equation}
+Since there is azimuthal symmetry, the magnetic quantum number $m$ can always be summed over, 
+and we can define a reduced density matrix $\rho_{l;l^\prime }$ that is independent of $m$. 
+Since the effective Hamiltonian is diagonal in angular momentum and internal quantum numbers, 
+the components of the density matrix are characterized as $\rho = ( \rho_{cl}(r) )$, where 
+$c$ indicates the internal (color) quantum number and 
+$l=0,1,2,\ldots$ indicates the angular momentum quantum number.  
+We understand $\mathrm{Tr}\,[\rho_{cl}(r)]$ as the probability to find the 
+subsystem in any state with angular momentum squared equal to $l(l+1)$ and internal quantum 
+number $c$.
+The total density matrix $\rho$ of the subsystem can be cast into the block-diagonal form 
+\begin{equation}
+\rho=\left(\begin{array}{ccc ccc}
+\rho_{s0} & 0 & 0 & 0 & 0 & 0  \\
+0 & \rho_{s1} & 0 & 0 & 0 & 0 \\
+0 & 0 & \ddots & 0 & 0 & 0  \\
+0 & 0 & 0  & \rho_{o0} & 0 & 0  \\
+0 & 0 & 0  & 0 & \rho_{o1} & 0  \\
+0 & 0 & 0  & 0 & 0 &  \ddots \\
+\end{array}\right)\,,
+\label{eq:rhoso}
+\end{equation}
+which is preserved at all times, if it has been realized at any time $t_0$, i.e. in the 
+initial state. 
+For simplicity of the following discussions, let us assume that we have a density matrix 
+of states with a well-defined angular momentum and a well-defined internal quantum number, 
+i.e. only a single non-vanishing block of the density matrix. 
+Since the Lindblad equation is linear in $\rho$, it is trivial to generalize these considerations. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Angular momentum transitions}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In order to understand angular momentum transitions, we need to remember that the jump term is 
+$\sum_{n} C_n\rho C_n^\dagger$, with $C_n$ defined in Eq.~\eqref{eq:collapse}, where $n=(c,i)$ 
+is a multi-index that ranges over $i=1,2,3$ for its spatial part and $c=0,1$ for its internal 
+(color) part. 
+Hence, the term that contributes in the master equation involves a sum over all spatial components, 
+with two powers of the same collapse operator; this results in a radially symmetric function of 
+$r^2$, and preserves the block-diagonal structure of the density matrix in Eq.~\eqref{eq:rhoso}. 
+Any individual jump operator $C_n$ induces a (chromoelectric) dipole transition: namely, when applied to any state with well-defined angular momentum 
+quantum number $l$, $C_n$ can produce only a state with angular momentum quantum number $l^\prime = l\pm 1$.
+%, since 
+%\begin{equation}
+%\int d\Omega Y_{lm}^\ast(\sin(\vartheta),\varphi) r_i(r,\sin(\vartheta),\varphi) Y_{l^\prime m^\prime}^{\phantom{\ast}}(\sin(\vartheta),\varphi)
+%\propto  r\, (\delta_{l^\prime,l+1}+\delta_{l^\prime,l-1}) \left\{\begin{array}{ll}
+%\delta_{m^\prime, m\mp 1} & i=1,2 \\
+%\delta_{m^\prime, m} & i=3 \\
+%\end{array}\right.\,.
+%\end{equation}
+For either internal quantum number component of the collapse operators (either value of $c=0,1$), 
+we have the probability to jump to either of the (up to two) values of $l^\prime$ given by 
+\begin{equation}
+p(l \to l^\prime) = 
+\frac{ \sum\limits_{i} \abs {\bra{ \psi_{c^\prime l^\prime}(r)} C_{i}^c \ket{ \psi_{cl}(r)} }^2 }
+{ \sum\limits_{i^\prime} \sum\limits_{l^{\prime\prime}=l \pm 1} \abs {\bra{ \psi_{c^\prime l^{\prime\prime}}(r)} C_{i^\prime}^c \ket{ \psi_{cl}(r)} }^2}
+=
+\frac{ \sum\limits_{i} \sum\limits_{m,m^\prime} \abs { Y_{l^\prime m^\prime}^\ast r_{i} Y_{l m}^{\phantom{\ast}} }^2 }
+{ \sum\limits_{i^\prime} \sum\limits_{l^{\prime\prime}=l \pm 1} \sum\limits_{m,m^{\prime\prime}} \abs {  Y_{l^{\prime\prime} m^{\prime\prime}}^\ast r_{i^\prime} Y_{l m}^{\phantom{\ast}} }^2}
+=\frac{1}{(2l+1)} \sum\limits_{i} \sum\limits_{m,m^\prime} \abs { Y_{l^\prime m^\prime}^\ast \frac{r_{i}}{r} Y_{l m}^{\phantom{\ast}} }^2
+\,.
+\end{equation}
+The prefactor is due to normalization of spherical harmonics. 
+For each $l$, the probabilities to jump to higher or lower $l$ are 
+\begin{align}
+p_{l,\pm} = p(l \to l \pm 1) =\frac{1}{2l+1}\sum_{m,m'} \abs{ Y_{l\pm 1\,m^\prime}^\ast \left(\frac{r_i}{r}\right) Y_{lm}^{\phantom{\ast}} }^2\,,
+\label{eq:Pl+-}
+\end{align}respectively, with $p_{l,+}=1-p_{l,-}$. 
+We generally obtain $p_{l,-}=\frac{l}{2l+1} < p_{l,+}=\frac{l+1}{2l+1}$, which is straightforward to obtain from recurrence relations. 
+%Starting from $l=0$, we can jump only to $l=1$, thus having $p_{0,+}=1$. For higher $l>0$, we use the observation that the same matrix element contributes in Eq.~\eqref{eq:Pl+-} 
+%to $p_{l,-}$ and $p_{l-1,+}$ to identify the recurrence relation 
+%\begin{equation}
+%p_{l,-} = \frac{2l-1}{2l+1} p_{l-1,+} = \frac{2l-1}{2l+1} \left( 1- p_{l-1,-}\right)\,.
+%\end{equation}
+%\redflag{[[I don't understand what's written here.]]  Together with the starting condition all jump probabilities are fixed as $p_{l,-}=\frac{l}{2l+1} < p_{l,+}$}, 
+As jumping to higher angular momentum is always favored, 
+equilibration would not be reached before $l=\infty$. 
+This is not surprising, as the evolution in the set of $l=0,1,2,\ldots$ must be a directed random walk 
+away from the lower bound.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Structure of the jump probability matrix}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Combining both observations, we can sketch the structure of the jump probability matrix as 
+\begin{equation}
+p_{jump}=\left(\begin{array}{cc}
+0                         &         p_{l\to l^\prime} \\
+p_{o \to s} p_{l\to l^\prime} & p_{o \to o} p_{l\to l^\prime} \\
+\end{array}\right)\,,
+\quad
+p_{l\to l^\prime} =\left(\begin{array}{ccccc}
+0           & \frac{1}{3} & 0           & 0           & \hdots\\
+1 & 0           & \frac{2}{5} & 0           & \hdots \\
+0           & \frac{2}{3} & 0           & \frac{3}{7} & 0\\
+0           & 0           & \frac{3}{5} & 0           & \ddots\\
+\vdots      & \vdots      & 0           & \ddots      & \ddots \\
+\end{array}\right)\,.
+\label{eq:pjump}
+\end{equation}
+The angular momentum probability matrix $p_{l\to l^\prime}$ is infinitely large. 
+We use two independent random numbers for the two decisions between jumping from octet to singlet or to octet 
+and for jumping to higher or lower angular momentum.
+
+Note that there are no jump matrices for the particular phenomenological potentials 
+of \ref{sec:isoksupotential} and \ref{sec:anisoksupotential}, since these interactions do not 
+permit transitions that are off-diagonal in angular momentum or internal quantum numbers. 
+However, the preceding considerations can be straightforwardly extended to arbitrary forms of 
+interactions with jump matrices that lead to radially symmetric partial widths.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsubsection{Hydrodynamic medium evolution with time and temperature dependent potential}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The entirety of in-medium effects in OQS+pNRQCD in the regime $1/a_0 \gg T,m_D\gg E$ at order $\mathcal{O}(r^2)$ in the multipole expansion and leading order in $E/T$ is contained in the coefficients $\gamma$ and $\kappa$. 
+Since the hot, nuclear medium is changing over time, so do $\kappa$ and $\gamma$. 
+If the medium is locally equilibrated such that a temperature can be defined (locally), 
+then the full temperature dependence of the master equation follows from these two coefficients; 
+on dimensional grounds, they are expected to scale as $\kappa \equiv \hat{\kappa}/T^3$ and $\gamma \equiv \hat{\gamma}/T^3$, where $\hat{\kappa}$ and $\hat{\gamma}$ may have further, 
+nontrivial temperature dependence. 
+Details of the time evolution of the medium and its temperature rely on a hydrodynamical description 
+of the medium; for oversimplified benchmarks and code tests, Bjorken evolution can be used, i.e. $T(\tau) = T_0 (\tau_{\rm med}/\tau)^{1/3}$ (see tab. \ref{tab:params}).
+Results for $\kappa(T)$ and $\gamma(T)$ have been obtained from lattice gauge theory 
+simulations in local thermal equilibrium ~\cite{Brambilla:2019tpt, Brambilla:2020siz}; 
+however, some modeling of their temperature dependence constrained by the lattice results is still necessary.
+Such lattice based models coupled to a hydrodynamical evolution of the medium could, therefore, describe 
+how these heavy-quark momentum diffusion coefficients evolve in time.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Summary of \qtraj execution}
+\label{ssec:algo}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+Let us collect everything together and summarize the practical algorithm at this point, 
+which takes the form of a multi-loop structure. 
+Note that the evolution with a phenomenological potential is performed in the same way, 
+except that there are no jumps; hence, without jumps the (extended) step 4 in the 
+summary of the execution does not exist.
+
+\begin{enumerate}
+    \item
+    The outermost loop (scripts external to the actual \qtraj code) \redflag{may be} over possible physics scenarios. 
+    This may include varying \texttt{Grid}, \texttt{Physics}, 
+    \texttt{Potential}, and \texttt{Temperature parameters} (i.e. Bjorken 
+    evolution or different hydrodynamical evolutions encoded by different 
+    ``temperature evolution'' or ``trajectory files''; see \ref{sec:formats}). 
+    The final time for each trajectories evolution is determined by the point in time at which the temperature along the trajectory drops below $T_f$.  Further evolution of the trajectory is not necessary since below $T_f$ the vacuum potential is used.
+    \item
+    The next loop (still external to the \qtraj code) \redflag{may be} over initial states of the subsystem. 
+    Its density matrix is a linear combination of pure states $\ket{ \psi_{cl}(0) }$ 
+    with well-defined angular momentum ($l$) and internal ($c$) quantum numbers,
+    \begin{equation}
+        \rho(0) = \sum_{\psi_{cl}} p_{\psi_{cl}} \ket{ \psi_{cl}(0) } \bra{ \psi_{cl}(0) }.
+    \end{equation}
+    We select either of these states $\ket{ \psi_{cl}(0) }$ with the appropriate 
+    \emph{initial state probability} $p_{\psi_{cl}}$.
+    In the current implementation, the initial state is typically a vacuum eigenstate or a Gaussian multiplied by an appropriate 
+    power of $r$ to realize the desired angular momentum in the initial state; such initial states can be 
+    color singlet or octet.
+    Here the actual \qtraj simulation code will be started. 
+    \item
+    We first compute one quantum trajectory with in-vacuum evolution of $\ket{ \psi_{cl}(0) }$ 
+    until the onset of coupling to the medium at $t_0$; the result $\ket{ \psi_{cl}(t_0) }$ 
+    is stored and reused later. 
+    For each quantum trajectory we define $\ket{ \psi_{cl}(t_{i}) } \equiv \ket{ \psi_{cl}(t_0) }$ 
+    for $i=0$. 
+    The zeroth trajectory completes without any jumps; its final state overlaps are 
+    recorded; the corresponding final state norm equals the probability of no jumps at all, 
+    $p_\text{NoJumps}$.
+    The outermost loop of \qtraj is over a set of \texttt{nTrajectories} quantum trajectories for 
+    the given initial condition. 
+    \item
+    Each quantum trajectory is computed in a separate loop over the evolution time, starting with 
+    the current state of the random number generator (as after the previous quantum trajectory);
+    the code alternates in a cycle between intermittent, iterative $H_\text{eff}$ evolution and 
+    instantaneous jumps for each individual quantum trajectory.
+    \begin{enumerate}
+        \item 
+        We draw a random number $r_i \in [0,1]$; 
+        in the first step of the first trajectory $i=0$, we distinguish two special cases: 
+        \begin{enumerate}
+            \item
+            If $r_0 < \mathrm{rMin} \equiv p_\text{NoJumps}$, we terminate the quantum trajectory and 
+            default to the known final state without any jumps.
+            \item
+            If $r_0 > \mathrm{rMax}$ (see tab. \ref{tab:params}) we terminate the quantum trajectory 
+            and report total loss for all low-lying bound states (zero overlaps).
+        \end{enumerate}
+        In the innermost loop we evolve the state $\ket{ \psi_{cl} (t_i) }$ with $H_\text{eff}$ 
+        to time $t_{i+1}$ as long as $ r < \abs{ \ket{ \psi_{cl} (t_{i+1}) } }^2$  and 
+        $t_{i+1} < t_\text{final}$.
+        \item
+        If the trajectory reaches $ r \ge \abs{ \ket{ \psi_{cl} (t_{i+1}) } }^2$ before 
+        reaching $t_{i+1} \ge t_\text{final}$, we consider whether there should be a jump in 
+         OQS+pNRQCD.  
+        If the simulation parameter \texttt{maxJumps} (see tab. \ref{tab:params}) is larger 
+        than the number of previous jumps, i.e. $i < \mathtt{maxJumps}$, we perform a jump.
+        Otherwise, we conclude that the subsystem has evolved too far away from the 
+        low-lying in-vacuum states to return in a finite amount of time; we thus terminate the quantum trajectory and report total loss for all low-lying bound states (zero overlaps).
+        \begin{enumerate}
+            \item
+            For $l>0$, we draw a random number $r_{il} \in [0,1]$ to 
+            decide if we jump to up or down in the angular momentum quantum number. 
+            The changed angular momentum quantum number affects the ensuing $H_\text{eff}$ 
+            evolution. 
+            \item
+            For $c=o$, i.e. an octet state, we draw another random number 
+            $r_{ic} \in [0,1]$ to decide if we jump in the internal quantum number from octet to 
+            octet or to singlet. 
+            The changed internal quantum number affects the ensuing $H_\text{eff}$ evolution. 
+            \item
+            The new state is obtained by multiplying the previous state with the radial part of the 
+            jump operator, i.e. for OQS+pNRQCD $\ket{ \psi_{c^\prime l^\prime}(t_{i+1}) } = r \ket{ \psi_{cl}(t_{i}) }$, 
+            while the angular momentum and internal quantum number dependence has been taken care of 
+            already by the probabilities. 
+        \end{enumerate}
+        \item
+        We proceed to the $(i+1)$\,th iteration of the cycle for this quantum trajectory, i.e. the new 
+        initial state is $\ket{ \psi_{c^\prime l^\prime}(t_{i+1}) }$, and its new quantum numbers change the 
+        Hamiltonian used in the next stage of the evolution (and we would rename the indices as $c^\prime \to c$, 
+        $l^\prime \to l$).
+        \item
+        Each set of final state overlaps together with metadata is written to disk as specified in 
+        \ref{sec:outputformats}.
+    \end{enumerate}
+    \item
+    The final state overlaps from all quantum trajectories are written to {\tt output/ratios.tsv}. 
+    We describe how to process and visualize the results in Section \ref{sec:notebooks}.
+\end{enumerate}
+
+\section{Key parts of the code}
+\label{sec:key}
+
+All source code for the \qtraj package can be found in the {\tt build/src} and {\tt build/include} directories.  The C++ files contained in {\tt build/src} are
+%
+
+\listingbox{%
+\dirtree{%
+.1 build/src.
+.2 eigensolver\_arma.cpp.
+.2 eigensolver\_mkl.cpp.
+.2 initialcondition.cpp.
+.2 interpolator.cpp.
+.2 outputroutines.cpp.
+.2 paramreader.cpp.
+.2 potential.cpp.
+.2 qtraj.cpp.
+.2 trajectory.cpp.
+.2 wavefunction.cpp.
+}
+}
+
+The main entry point is {\tt build/src/qtraj.cpp}.  The main routine found in this file calls routines defined in the other files.  In the following subsections, we present some key parts of the code to assist users in understanding the core subroutines which evolve the wave-function between quantum jumps and the central logic used to implement stochastically sampled quantum jumps.  Note that lines that begin with ``.'' indicate portions of the code that have been omitted for readability.
+
+%------------------------------------------------------------
+\subsection{Split-step pseudo-spectral wave-function update}
+%------------------------------------------------------------
+
+In between quantum jumps, \qtraj uses a split-step pseudo-spectral method to evolve the wave-function as described in Sec.~\ref{sec:splitstep}.  This is implemented by the routine {\tt makeStep} shown below which is defined in the file {\tt wavefunction.cpp}.  This routine calls another function called {\tt DST} which performs the discrete sine transform of the real and imaginary parts of the wavefunction separately and then sets the double complex wave-function variable to the required DST (in-place transform).  The variables {\tt in} and {\tt out} are buffers used to hold intermediate results.  The variable {\tt spaceKernel} contains $\exp(-i dt \, V_\text{eff}  / 2)$, which are the values of the spatial part of the time evolution operator evaluated at each point on the spatial lattice.  Note that due to the fact that the potential is time dependent the variable {\tt spaceKernel} must be updated at every time step.  The variable {\tt momKernel} contains $\exp(-i dt \, T_\text{kin})$, which are the values of the momentum-part of the time evolution operator evaluated at each point on the conjugate momentum lattice.  Note that the kinetic energy operator is time-independent and, hence, {\tt momKernel} only needs to be loaded during the initialization stage.
+%
+\begin{lstlisting}
+void makeStep(fftw_plan p, dcomp* wfnc, double* in, double* out, dcomp* spaceKernel, dcomp* momKernel)
+{
+    // make one spatial half-step
+    for (int i=0; i<num; i++) wfnc[i] = spaceKernel[i]*wfnc[i];
+    // forward DST transform
+    DST(p, wfnc, in, out);
+    // make one full step in momentum space
+    for (int i=0; i<num; i++) wfnc[i] = momKernel[i]*wfnc[i];
+    // backward DST transform; it's its own inverse
+    DST(p, wfnc, in, out);
+    // make one spatial half-step
+    for (int i=0; i<num; i++) wfnc[i] = spaceKernel[i]*wfnc[i];
+}
+\end{lstlisting}
+
+%------------------------------------------------------------
+\subsection{Wave-function evolution without jumps}
+%------------------------------------------------------------
+
+The \qtraj code includes the capability to run with and without quantum jumps.  If jumps are turned off, then \qtraj simply evolves the wave-function using the complex effective Hamiltonian $H_\text{eff}$.  This is implemented in the routine {\tt evolveWavefunction} listed below.  This routine takes two arguments which are the integer index of the starting time for the evolution {\tt nStart} and the number of time steps to evolve the wave-function forward in time {\tt nSteps}.
+%
+\begin{lstlisting}
+double evolveWavefunction(int nStart, int nSteps) {
+    
+    double norm = 1;
+    double rexp;
+    
+    // begin time loop
+    for (int n=nStart;n<nStart+nSteps;n++) {
+        
+        // update the space kernel
+        loadSpaceKernel(T[n]);
+        
+        // output info to screen and/or disk
+        if (n%snapFreq==0 || n==nStart) {
+            norm = computeNorm(wfnc);
+            outputInfo(n,norm,false);
+        }
+        
+        // update the wavefunction
+        makeStep(p,wfnc,in,out,spaceKernel,momKernel);
+    
+    } // end time loop
+    
+    // output final wavefunction, summary info, and ratios
+    norm = computeNorm(wfnc);
+    outputInfo(nStart+nSteps,norm,false);
+    return norm;
+    
+}
+\end{lstlisting}
+
+%------------------------------------------------------------
+\subsection{Wave-function evolution with jumps}
+%------------------------------------------------------------
+
+A compactified listing of the {\tt evolveWavefunctionWithJumps} routine found in the file {\tt trajectory.cpp} is shown below (see also Section ~\ref{ssec:algo}).  
+The first argument {\tt nStart} is the index of the starting time for the evolution and the second argument {\tt rmin} is the minimum initial random number to consider.  
+This variable is computed by first running a complete $H_\text{eff}$ evolution in order to determine the final normalization which is obtained.
+Since any random number that is smaller than the final $H_\text{eff}$ normalization will result in no quantum jumps, there is no reason to check for jumps.  
+In this case, the routine sets the overlaps to the overlaps determined from the $H_\text{eff}$ performed during initialization.
+
+In addition, as can be seen from the code listing below, there is a global parameter called {\tt rMax} which sets the maximum initial random number that will be accepted by the algorithm.  
+If the initial random number is less than {\tt rMax}, then \qtraj assumes that the stochastic evolution will result in too many jumps for there to be a significant final overlap with singlet bound states.  
+The default for this parameter is 1 and reducing from 1 results in faster code execution.  
+This faster execution, however, results in a systematic uncertainty (see Fig.~\ref{fig:scaling4} and surrounding discussion).
+
+After this initial check, the evolution proceeds by generating a random number uniformly distributed between 0 and 1, then evolving the wave-function until the norm of the wave-function drops below this number.  
+At this point a quantum jump is triggered and two additional random numbers are generated to determine the outgoing color and angular momentum quantum numbers.  
+Finally, the wave-function is multiplied by $r$ and re-normalized using the {\tt doJump} subroutine.  
+After this the routine continues the time loop by regenerating a new random number and evolving the wave-function forward in time with the updated quantum numbers.  
+In all cases, the final result from this routine is stored in a double array called {\tt singletOverlaps}. 
+%
+\begin{lstlisting}
+void evolveWavefunctionWithJumps(int nStart, double rmin) {
+    .
+    .
+    // generate initial random number
+    double r = Random();
+    firstRandomNumber = r; // save this for testing output
+    // check to see if jumps will be triggered at all
+    if (r<rmin) {
+        print_line();
+        cout << "==> No jumps necessary.  ";
+        cout << "Setting overlaps to Heff overlaps." << endl;
+        retrieveNoJumpsSingletOverlaps();
+        return;
+    }
+    // check to see if upper threshold is crossed
+    if (r > rMax) {
+	    print_line();
+        cout << "==> Initial random number greater than rmax.  ";
+        cout << "Setting overlaps to zero." << endl;
+        for (int i=0; i<nBasis; i++) singletOverlaps[i] = 0;
+        return;
+    }
+    .
+    .
+    // normal evolution until norm drops below random threshold r = Random(0,1) 
+    .
+    .
+    // do the jump if necessary
+    if (n<maxSteps) {
+        
+        // output some info just before the jump
+        norm = computeNorm(wfnc);
+        outputInfo(n,norm,true);
+        
+        // determine new angular momentum state
+        if (Random() < AngMomProb(lval)) lval -= 1;
+        else lval += 1;
+        
+        // determine new color state
+        if (cstate == OCTET  && Random() < 2./7.) cstate = SINGLET;
+        else cstate = OCTET;
+        
+        // apply jump operator and normalize to 1
+        doJump(wfnc);
+        
+        // generate new random # and increment nJumps
+        r = Random();
+        nJumps++;
+        
+        // output some info just after the jump
+        norm = 1; // forced to be one by doJump so don't waste time computing it
+        outputInfo(n,norm,true);
+    }
+    
+    // check to see if we exceeded the maximum number of jumps
+    if (nJumps>=maxJumps) {
+        print_line();
+        cout << "==> Exceeded max jumps.  Terminating evolution." << endl;
+        print_line();
+        break;
+    }
+    .
+    .
+    .    
+}
+
+\end{lstlisting}
+
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\fbox{\includegraphics[width=0.85\linewidth]{figures/viewer-example.png}}
+\end{center}
+\caption{Example {\tt viewer.nb} output.} 
+\label{fig:viewer-example}
+\end{figure}
+%-----------------------------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Data analysis notebooks}
+\label{sec:notebooks}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\redflag{ When \qtraj is run the code can output snapshots of the evolution of the wave-function in the {\tt output} or {\tt output-<seed>} directory depending on the setting {\tt dirnameWithSeed} (see \ref{sec:params}).
+The format for these files is detailed in App.~\ref{sec:outputformats}.
+The user can turn off the output of these snapshots by setting {\tt saveWavefunctions} to 0.  The only other disk output from \qtraj is to the file {\tt ratios.tsv} in the output directory.  
+The format of this file depends on the {\tt temperatureEvolution} parameter (see \ref{sec:params}) as described in Sec.~\ref{sec:outputformats}.  In order to assist the user in understanding how to process the resulting output, we have included some Mathematica notebooks that read all three output formats.}
+
+The {\tt mathematica} directory in the main package contains Mathematica \cite{Mathematica} notebooks that can be used for data analysis:
+%
+\listingbox{%
+\dirtree{%
+.1 mathematica.
+.2 raaCalculator.nb.
+.2 raaCalculator-trajectories.nb.
+.2 ratioFileReader.nb.
+.2 viewer.nb.
+}
+}
+
+\subsection{The notebook {\tt viewer.nb}}
+
+The Mathematica notebook {\tt viewer.nb} allows the user to visualize the wave-function evolution produced by \qtraj.  To generate the files necessary, the parameter {\tt saveWavefunctions} should be set to 1.  In this configuration, the initial wave-function, ``snapshots'' of the wave-function recorded every {\tt snapFreq} steps, and the final wave-function are exported to the {\tt output} folder as separate files named {\tt snapshot\_\#.tsv}, where \# is the step in the evolution.  
+
+To generate output for testing, the user can execute the following example
+%
+\listingbox{%
+\tt
+\$ ./qtraj -initType 0 -doJumps 0 -saveWavefunctions 1 -dirnameWithSeed 0
+}
+%
+Upon successful completion, one can open the {\tt viewer.nb} notebook and evaluate all cells in the notebook.  Typical output is shown in Fig.~\ref{fig:viewer-example}.
+
+
+\subsection{The notebook {\tt ratioFileReader.nb}}
+
+To generate output for testing, the user can execute the following example
+%
+\listingbox{%
+\tt
+\$ ./qtraj -initType 0 -doJumps 1 -nTrajectories 128 -dirnameWithSeed 0
+}
+%
+Upon successful completion, the code will generate a file {\tt output/ratios.tsv} which contains the resulting survival probabilities (or overlaps) for the 1S, 2S, 2P, 3S, 3P AND 3D states.  To visualize the data the user can open the {\tt ratioFileReader.nb} Mathematica notebook and evaluate all cells in the notebook.  In the first section of the notebook produces data for the ratios averaged over all trajectories based on the output generated in {\tt output/ratios.tsv}. A summary plot similar to Fig.~\ref{fig:ratioFileReader-example} should be generated.  To add more statistics the user can rerun the command above.  The newly generated results will be appended to {\tt output/ratios.tsv}.
+
+
+%-----------------------------------------------
+\begin{figure}[ht]
+\begin{center}
+\fbox{\includegraphics[width=0.8\linewidth]{figures/ratioFileReader-example.png}}
+\end{center}
+\caption{Example {\tt ratioFileReader.nb} output.} 
+\label{fig:ratioFileReader-example}
+\end{figure}
+%-----------------------------------------------
+
+
+\subsection{The notebook {\tt raaCalculator-trajectories.nb}}
+
+Note that, although the example above runs on a single core, with \qtraj it is possible to launch many trajectories simultaneously if you have access to a computing facility that supports Portable Batch Scripts (PBS).\footnote{We have also provided two condor scripts which can be used for launching trajectories on the Open Science Grid \cite{osg07,osg09}.}  For this purpose we have provided a PBS script {\tt scripts/manyTrajectories.pbs}.  This script automates the extraction of individual physical trajectories from a tgz file containing a large number of Monte-Carlo generated physical trajectory files that individually have the format specified in Sec.~\ref{sec:formats2}.  The tgz file should be saved in the following location: {\tt input/runset/trajectories.tgz}.  An example trajectories.tgz file can be downloaded from Ref.~\cite{kent-code-library}. The {\tt manyTrajectories.pbs} script has adjustable variables at the top that allow the user to set the number of cores to launch jobs on, plus the number of physical and quantum trajectories to generate.
+
+
+\begin{lstlisting}[language=Bash]
+#PBS -l walltime=8:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=300MB
+#PBS -t 1-100
+#PBS -N qtraj-trajectory
+#PBS -j oe
+#PBS -A PGS0253
+
+module load fftw3
+
+# number of phyical trajectories to sample
+NPTRAJ=100
+
+# number of quantum trajectories to sample per physical trajectory
+NQTRAJ=50
+  .
+  .
+  .
+# extract random unique set of NPTRAJ trajectories from trajectories.tgz
+tar -ztf $PBS_O_WORKDIR/input/runset/trajectories.tgz | shuf -n ${NPTRAJ} > trajectoryList.txt
+tar -xzf $PBS_O_WORKDIR/input/runset/trajectories.tgz --warning=no-timestamp --files-from trajectoryList.txt
+  .
+  .
+  .
+for file in ./input/runset/*
+do
+    echo "Running with $file"
+    # run the code first for l=0 then for l=1
+    ./qtraj -initL 0 -nTrajectories ${NQTRAJ} -temperatureEvolution 2 -temperatureFile $file > log_0_${cnt}.txt 2> err_0_${cnt}.txt
+    ./qtraj -initL 1 -nTrajectories ${NQTRAJ} -temperatureEvolution 2 -temperatureFile $file > log_1_${cnt}.txt 2> err_1_${cnt}.txt
+done
+  .
+  .
+  .
+\end{lstlisting}
+
+\redflag{For post-postprocessing, all {\tt ratio.tsv} files produced during execution of the {\tt manyTrajectories.pbs} script should be concatenated and combined into a single gzipped file, canonically named {\tt datafile.gz}.  This step is the responsibility of the user since different computing environments have potentially different formats for the output directory structure, etc.  To process the data, the user should create a new directory in the {\tt input} subfolder of the {\tt mathematica} folder and place the {\tt datafile.gz} in the new folder.  An example {\tt datafile.gz} file is supplied with the \qtraj distribution and can be found in the {\tt mathematica/input/example1} folder.  The supplied version of {\tt mathematica/raaCalculator-trajectories.nb} is setup to read in this example and, upon successful execution, should generate a plot similar to that shown in Fig.~\ref{fig:raaCalculator-trajectories}.
+}
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\fbox{\includegraphics[width=0.9\linewidth]{figures/raa-trajectories.png}}
+\end{center}
+\caption{Example {\tt raaCalculator-trajectories.nb} output.} 
+\label{fig:raaCalculator-trajectories}
+\end{figure}
+%-----------------------------------------------
+
+\subsection{The notebook {\tt raaCalculator.nb}}
+
+To make runs using physical-trajectory averaged temperatures files, the \qtraj package includes a PBS script called {\tt scripts/scanImpactParameters.pbs}.  The header and topmost variables of of this script allow the user to specify the number of cores to run the code on and the number of trajectories each core should generate.
+
+\begin{lstlisting}[language=Bash]
+#PBS -l walltime=08:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=300mb
+#PBS -t 1-100
+#PBS -N qtraj-fftw
+#PBS -j oe
+#PBS -A PGS0253
+
+module load fftw3
+
+# number of quantum trajectories per impact parameter for each job
+# total number is number of jobs is array times this
+NTRAJ=2048
+
+# impact parameter list
+blist=("0" "2.32326" "4.24791" "6.00746" "7.77937" "9.21228" "10.4493"\
+"11.5541" "12.5619" "13.4945" "14.3815")
+
+  .
+  .
+  .
+\end{lstlisting}
+
+\redflag{The example above would launch \qtraj on 100 cores, with each instance generating 2048 quantum trajectories.  Once combined, this results in 204,800 quantum trajectories per point in {\tt blist}.}
+It is the user's responsibility to adjust the number of requested nodes using the line {\tt PBS -t 1-100}. The range specified indicates the number of independent machines (cores) to use.  The amount of time specified by {\tt PBS -l walltime=02:00:00} is the expected maximum time for each core to complete the task.  The user can set the number of quantum trajectories for each core to simulate using the variable {\tt NTRAJ}.  Finally, there is a list of impact parameters to loop over.  These should map to the input files of the form {\tt input/temperature/averageTemperature\_<impact parameter>.txt}.\footnote{A set of such files is included in the standard distribution.}
+
+After adjusting {\tt scripts/scanImpactParameters.pbs} to their needs, from the main directory the user can execute
+\listingbox{%
+\tt
+\$ qsub ./scripts/scanImpactParameters.pbs
+}
+%
+to launch a job.  \redflag{
+Upon successful completion, a directory, or directories depending on the user's environment, of the form {\tt output-$<$jobid$>$} should have been created which should contain sub-folders for each of the impact parameters in {\tt blist}.  
+Inside of each impact parameter's folder, there should be a file named {\tt ratios.gz} which is a compressed collection of ratio outputs.  
+If the user's system generates multiple output folders, the user will need to combine the ratios.gz files for each impact parameter.  
+This can be done by using the {\tt cat} utility in UNIX, e.g., {\tt cat output-*/0/ratios.gz > ./combined/0/ratios.gz}.
+We have provided a shell script {\tt scripts/combine.sh} to facilitate this process.
+
+To produce a plot of the computed survival probabilities, the user can open the Mathematica notebook {\tt raaCalculator.nb} and adjust the paths to point to the local output directory (or the combined one created using {\tt cat} or {\tt scripts/combine.sh}).  
+Upon successful execution, the user should be presented with a plot similar to the one shown in Fig.~\ref{fig:raaCalculator-trajectories}.
+We have provided a sample output directory with the distribution called {\tt mathematica/input/example2} and the notebook {\tt raaCalculator.nb} is configured to import data from this folder as an example for the user.
+}
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\fbox{\includegraphics[width=0.9\linewidth]{figures/raaCalculator-example.png}}
+\end{center}
+\caption{Example {\tt raaCalculator.nb} output.} 
+\label{fig:raaCalculator}
+\end{figure}
+%-----------------------------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Code performance and scaling tests}
+\label{sec:tests}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The \qtraj distribution includes a suite of built-in self tests that can be run using {\tt make~tests}.  This functionality requires that the Google testing framework to be installed (see \ref{subsec:installgtest}).  In addition, we note that apples-to-apples comparisons of \qtraj and a QuTiP 2 implementation of the Lindblad equation solver has been performed in Ref.~\cite{Brambilla:2020qwo}.  Therein it was demonstrated that \qtraj and QuTiP 2 implementations of the Lindblad equation solver were in agreement when the same lattice sizes, angular momentum cutoff, etc. were used.
+
+In this section, we present the dependence of \qtraj results on various run time parameters, e.g. lattice spacing, lattice volume, temporal step size, maximum number of jumps, etc.  For all results presented in this section we used Gaussian S-wave initial conditions with $\Delta = 0.2 a_0$ and Bjorken temperature evolution starting at $\tau = 0.6$ fm with $T_0=$ 425 MeV and terminating at $T_f = 250$ MeV.  
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-a.pdf} \hspace{5mm} 
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-L.pdf}
+\end{center}
+\caption{(Left) Survival probabilities for $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ versus the number of lattice sites for a fixed volume $L = 80\ \text{GeV}^{-1}$.  (Right) Same versus the lattice volume $L$ for fixed $a = 0.0195 \text{GeV}^{-1}$.  For both panels, we used Gaussian S-wave initial conditions with $\Delta = 0.2 a_0$ and Bjorken temperature evolution starting at $\tau = 0.6$ fm with $T_0=$ 425 MeV.  Error bars indicate the statistical uncertainty associated with averaging over 100,000 quantum trajectories.} 
+\label{fig:scaling}
+\end{figure}
+%-----------------------------------------------
+
+In the left panel of Fig.~\ref{fig:scaling} we present the dependence of the extracted $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities on the lattice spacing with a fixed lattice volume of $L = 80\ \text{GeV}^{-1}$.  We obtained the survival probabilities by computing the ratio of the modulus squared of each eigenstate's overlaps with the final and initial wave-functions, respectively. We note that the square of an eigenstate overlap with the initial wave-function corresponds, in our model, to the probability to measure that state if there was no medium. This ratio was then averaged over 100,000 quantum trajectories and we report the mean along with the uncertainties obtained by computing the standard error of the mean.  As can be seen from the left panel of Fig.~\ref{fig:scaling}, there is only a weak dependence on the lattice spacing.  In order to quantify this variation we note that the ratios of the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities obtained using 8192 and 4096 lattice points is $\{1.02 \pm 0.04,1.11 \pm 0.08,1.15 \pm0.11\}$, respectively. Note that the effects of the radial discretization are naturally expected to be more severe for states with larger contributions from small radii. For past phenomenological studies 4096 points were used with a volume of $L = 80\ \text{GeV}^{-1}$ \cite{Brambilla:2020qwo}. 
+
+In the right panel of Fig.~\ref{fig:scaling} we present the dependence of the extracted $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities on the lattice volume $L$ holding the lattice spacing fixed at $a = 5/256 \ \text{GeV}^{-1}$.  As this figure demonstrates, for the type of initial conditions used, one finds that there is no significant volume effect for $L > 20 \ \text{GeV}^{-1}$.  Again, in order to quantify this variation we note that the ratios of the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities obtained using $L=80$ and 160 $\text{GeV}^{-1}$ is $\{1.01\pm0.04,1.10\pm0.07,1.16\pm0.10\}$, respectively.  Taken together these results demonstrate that with 100,000 trajectories the systematic uncertainties associated with finite lattice size and spacing are on the order of 1\%, 10\%, and 15\% for the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities, respectively. Note that the effects of the finite volume are naturally expected to be more severe for states with larger contributions from large radii.
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-dt.pdf} \hspace{5mm}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-delta.pdf}
+\end{center}
+\caption{(Left) Survival probabilities for $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ versus the time interval $\Delta t$ for a fixed volume $L = 80\; \text{GeV}^{-1}$ and $NUM=4096$.  (Right) Same as a function of the width of the initial Gaussian $\Delta/a_0$.  For the left panel we used Gaussian S-wave initial conditions with $\Delta = 0.2 a_0$.  For both panels, we used Bjorken temperature evolution starting at $\tau = 0.6$ fm with $T_0=$ 425 MeV.  In both panels, the error bars indicate the statistical uncertainty associated with averaging over quantum trajectories.} 
+\label{fig:scaling2}
+\end{figure}
+%-----------------------------------------------
+
+Turning next to the dependence of the survival probabilities on the temporal lattice spacing $\Delta t$ ({\tt dt}), in the left panel of Fig.~\ref{fig:scaling2} we present the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities as a function of the $\Delta t$.  For each $\Delta t$ we kept $L = 80\ \text{GeV}^{-1}$ and $NUM=4096$ and averaged over 100,000 quantum trajectories.  As can be seen from this figure, the results show a weak dependence on the assumed temporal lattice spacing.  In this case we find that the ratios of the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities obtained using $\Delta t=0.005$ and 0.001 $\text{GeV}^{-1}$ is $\{1.029\pm0.03,1.11\pm0.05,1.15\pm0.08\}$, respectively.  From this we can estimate the uncertainty associated with the temporal lattice spacing is order the order of 1\%, 10\%, and 15\% for the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities, respectively.
+
+In the right panel of Fig.~\ref{fig:scaling2} we present the dependence of the extracted 1S, 2S, and 3S survival probabilities on the width of the initial width $\Delta$ of the Gaussian wave-function used.  As can be seen from this figure, the 1S survival probability does not depend strong on the assumed value of $\Delta$, whereas the excited states survival probablitities only become approximately independent of $\Delta$ for $\Delta \lesssim 0.2$.  In order to quantify the change we note that the ratio  the ratios of the $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ survival probabilities obtained using $\Delta/a_0=0.1$ and 0.02 is $\{1.00\pm 0.04,1.06\pm 0.08,1.09\pm 0.11\}$, respectively.  These are all consistent with unity within statistical errors, however, there is an indication that the corrections are larger for excited states.  We note that when using $\Delta/a_0 = 0.1$ we doubled the number of quantum trajectories in order to obtain similar uncertainty estimates as $\Delta/a_0 = 0.2$ due to the fact the system jumps more frequently the smaller $\Delta$ is.  For this reason, for phenomenological applications we have used $\Delta/a_0 = 0.2$ since it required substantially less computational effort.
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-maxJump.pdf} \hspace{5mm}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-rMax.pdf}
+\end{center}
+\caption{(Left) Survival probabilities for $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ versus the maximum number of jumps allowed for a fixed volume $L = 80\ \text{GeV}^{-1}$ and $\text{NUM}=4096$.  (Right) Same versus {\tt rMax}.  For both panels, we used Gaussian S-wave initial conditions with $\Delta = 0.2 a_0$ and Bjorken temperature evolution starting at $\tau = 0.6$ fm with $T_0=$ 425 MeV.  Error bars indicate the statistical uncertainty associated with averaging over 100,000 quantum trajectories.} 
+\label{fig:scaling3}
+\end{figure}
+%-----------------------------------------------
+
+Finally, we investigate the dependence of \qtraj results on two optimization parameters {\tt maxJumps} and {\tt rMax}.  The former sets the maximum number of jumps before the state evolution is terminated and the latter sets the maximum value for the initial random number used during quantum trajectory evolution.  We generate the initial random number in the range $(0,1)$, however, if the generated initial random number is greater than {\tt rMax}, we set the survival probability for the quantum trajectory sampled to zero.  This is justified by the fact that trajectories that jump early in the quantum trajectory evolution will have essentially zero overlap with the singlet bound states of interest.  In the left panel of Fig.~\ref{fig:scaling3} we present the 1S, 2S, and 3S survival probabilities as a function of ${\tt maxJumps}$.  As this panel demonstrates the results for the $\Upsilon(1S)$ survival probability does not depend strongly on ${\tt maxJumps}$, whereas the two excited states have more dependence on this parameter. 
+%The probability to jump back to singlet $S$-wave in two jumps is $2/21$; 
+%for four jumps, the probability to return to singlet $S$-wave is $10/343$ if the system stays in octet between the first and the last jump, or
+%$172/15435$, if the system return is in singlet whenever possible. 
+%\redflag{But note that to compute the probability is more complex, we also need the projection of the wave-function to $r^2$ {\color{blue}JHW: ``projection of the wave-function to $r^2$`` confuses me. I would rather say ``multiplication by $r$ with each jump''}, and we need to account for the intermittent evolution with a repulsive potential, while the system is in color octet state, which contributes substantially to a diminished overlap with compact bound states.}
+Turning to the right panel of Fig.~\ref{fig:scaling3} we present the 1S, 2S, and 3S survival probabilities as a function of ${\tt rMax}$.  From this figure we once again see that the 1S state survival probability is independent of this parameter while the excited states survival probabilities have a weak dependence on ${\tt rMax}$.  In practice, ${\tt rMax} < 1$ can be used to accelerate code execution with the speed gain proportional to 1/{\tt rMax}. This functionality is useful for obtaining quick estimates of survival probabilities.
+
+\section{Code benchmarks and comparisons with existing frameworks}
+\label{sec:benchmarks}
+%-----------------------------------------------
+
+One of the key benefits of \qtraj compared to methods which rely on direct solution of the reduced density matrix evolution is that in terms of computational complexity \qtraj is expected to scale like ${\tt NUM} \log{\tt NUM}$ since the vast majority of computational work is done in performing forward and inverse Fourier Sine transforms.  On the contrary, methods which solve the matrix evolution equation directly can be expected to scale like ${\tt NUM}^\alpha$ with $\alpha \gtrsim 3$.  Additionally, in terms of memory use, the memory footprint of \qtraj scales like ${\tt NUM}$, whereas in this respect matrix-based methods scale like ${\tt NUM}^2$.  Since, in practice, one must have large spatial grids in order to properly resolve both bound and unbound state dynamics, this places a strong limitation on such methods.  We also note that since each quantum trajectory sampled by \qtraj is statistically independent, one can parallelize the production of \qtraj results straightforwardly.
+
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.44\linewidth]{figures/qtraj-perf.pdf} \hspace{5mm}
+\includegraphics[width=0.44\linewidth]{figures/QuTiP-perf.pdf}
+\end{center}
+\caption{(Left) Time in seconds required to compute one quantum trajectory using QTraj as a function of the number of discrete points in the lattice, {\tt NUM}.  Data was obtained from average using 5 runs for each {\tt NUM} which generate 100 quantum trajectories.  For the measurement we used the UNIX utility {\tt perf}.  Solid and dashed lines show the result of two fits to this data.  (Right) Time in seconds to compute the evolution of the density matrix with $l_{\rm max} = 1$ using QuTiP 2 as a function of the {\tt NUM}.  Data was again obtained by averaging over 5 runs for each {\tt NUM}.  Solid line shows a fit to the collected data.  In both left and right panels Gaussian S-wave initial conditions were used.} 
+\label{fig:performance}
+\end{figure}
+%-----------------------------------------------
+
+In order to compare the two methods we use the code developed in Ref.~\cite{Brambilla:2016wgg,Brambilla:2017zei} which solves the same problem, but uses the \textit{mesolve} function of the popular QuTiP 2 Python package for describing the dynamics of open quantum systems \cite{qutip2,Brambilla:2016wgg,Brambilla:2017zei}.  The same initial conditions, namely singlet S-wave Gaussian initial conditions with $\Delta=0.2$ were considered.  In the left panel of Fig.~\ref{fig:performance} we present the number of seconds required per trajectory as a function of the lattice size ${\tt NUM}$.  For this measurement we used the UNIX {\tt perf} utility and measured the mean run-time per trajectory along with the standard error of the mean. All tests were performed on an a single Intel Xeon E5-2630 v3 CPU, which runs at a clock rate of 2.40 GHz.  The total memory available to the runs was 64 GB and the operating system used was Red Hat Enterprise Linux Server release 7.9.
+
+The solid and dashed lines in Fig.~\ref{fig:performance} show the result of two fits to these data.  The solid red line indicates the result obtained when assuming a fit function of the form $A \, {\tt NUM}^B \, \log{\tt NUM}$.  We note, importantly, that the extracted coefficient $B$ is very close to unity in this case, suggesting that the scaling of the \qtraj execution time is dominated by the underlying FFTs which is predicted to give scaling of the form ${\tt NUM} \log{\tt NUM}$.  As an alternative, the green dashed line shows results obtained using a fit form $A {\tt NUM}^B$.  As one can see, in this range the two fits to the \qtraj performance data are virtually indistinguishable and one finds that they have similar $\chi^2$ per degree of freedom.  We find that these two fits to the \qtraj single trajectory time are within 5\% of one another for $512 \leq {\tt NUM} \leq 2.5 \times 10^5$.
+
+In the right panel of Fig.~\ref{fig:performance} we present run-times for the QuTiP 2 based solver \cite{qutip2,Brambilla:2016wgg,Brambilla:2017zei}.  In this case, one is restricted to much smaller lattices due to the memory footprint of the matrix-based solvers; ${\tt NUM} = 512$ was the largest lattice that we could run given the total memory of the machine used for testing (64 GB).  From the right panel of Fig.~\ref{fig:performance} we see that the QuTiP 2 run-time data collected are well-described by a fit of the form $A \, {\tt NUM}^B$ with $B \sim 4$.  
+We note that the measurements presented in the left and right panels of Fig.~\ref{fig:performance} are not directly comparable since the left panel presents the single trajectory run times.  In order to compare the total run times, one should multiply the \qtraj single-trajectory estimates by the number of quantum trajectories that are necessary to obtain convergence within a given bound.  In practice, for the application to bottomonium suppression ($R_{AA}$) one finds that, for a single physical trajectory through the quark-gluon plasma, on the order of 100,000 trajectories are required to obtain sufficient statistics (see e.g. Figs.~\ref{fig:scaling}-\ref{fig:scaling3} where typical statistical uncertainties are reported).  Finally, we note that one major advantage of the \qtraj solver is that in this case one does not have to impose a cutoff on the orbital angular momentum $l$, whereas in the QuTiP 2 based implementation an angular momentum cutoff of $l_\text{max}=1$ was used.  If one increases the angular momentum cutoff in the QuTiP 2 based code, then the resulting run times will be longer and memory limitations more severe, since the dimension of the reduced density matrix scales like $(2 \, {\tt NUM} \, (l_\text{max} + 1))^2$, where the factor of 2 accounts for the color singlet and octet states.  
+
+Based on the performance data collected and discussions above one can estimate
+%
+\be
+T_\text{qtraj} \sim \frac{N_\text{traj} \, {\tt NUM} \, \log  {\tt NUM}}{N_\text{cores}} \, ,
+\ee
+%
+where $N_\text{cores}$ is the number of independent cores available and
+%
+\be
+T_\text{QuTiP 2}^\text{single\ core} \sim l_\text{max}^4 \, {\tt NUM}^4 \, .
+\ee
+%
+As a case study one can consider the case of ${\tt NUM} =4096$ which was used in the phenomenological predictions contained in Ref.~\cite{Brambilla:2020qwo}. Assuming $N_\text{traj} = 10^5$ and $l_\text{max} = 1$, for a single core one obtains $T_\text{qtraj}^\text{single\ core} \simeq 3 \times 10^5$ seconds, whereas the extrapolated prediction for $T_\text{QuTiP 2}^\text{single\ core}$ is $3.6 \times 10^7$ seconds.  Based on our fits, when $l_\text{max}=1$ and $N_\text{traj}=10^5$, the two codes become comparable in run time for lattices of size ${\tt NUM}_\text{cross}^{l_\text{max}=1} \sim 850$.  For $l_\text{max} \geq 1$, one can expect this point to be at ${\tt NUM}_\text{cross} \sim 850/l_\text{max}$, which goes to zero as $l_\text{max}$ becomes large.  Summarizing, we find that for ${\tt NUM} \gtrsim {\tt NUM}_\text{cross}$ \qtraj running on a single core will be more computationally efficient than the QuTiP 2 implementation used in \cite{Brambilla:2016wgg,Brambilla:2017zei}.
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-ntraj.pdf} \hspace{5mm}
+\includegraphics[width=0.45\linewidth]{figures/stats-vs-ntraj2.pdf}
+\end{center}
+\caption{(Left) Survival probabilities for $\Upsilon(1S)$, $\Upsilon(2S)$, and $\Upsilon(3S)$ versus the number of quantum trajectories for a fixed volume $L = 80\ \text{GeV}^{-1}$ and $\text{NUM}=4096$.  (Right) Off-diagonal overlaps with the $\chi_b(1P)$, $\chi_b(2P)$, and $\Upsilon(1D)$ states.  For both panels, we used Gaussian S-wave initial conditions with $\Delta = 0.2 a_0$ and Bjorken temperature evolution starting at $\tau = 0.6$ fm with $T_0=$ 425 MeV.  Error bars indicate the statistical uncertainty associated with averaging the considered subset of quantum trajectories.
+} 
+\label{fig:scaling4}
+\end{figure}
+%-----------------------------------------------
+
+
+Finally, we emphasize that what was compared above is the single core run time.  Due to the embarrassingly parallel nature of the \qtraj algorithm one can simply run the code on many distributed cores simultaneously and no communication is required between cores.  In principle, it is also possible to parallelize the QuTiP 2 based code, however, due to the fact that the computation does not easily factorize into independent processes one can expect significant communication bottlenecks. Based on our results and this discussion, our conclusion is that, when simulating large lattices, \qtraj provides a superior implementation of the Lindblad equation solver, and it does so without imposing an angular momentum cutoff.  We additionally note that, due to the portable and lightweight nature of the \qtraj code, one can leverage state, national, and international computing facilities, where typically tens of thousands of cores are available, thus greatly accelerating the computation.
+
+Eventually, one has to ask how many trajectories are necessary to achieve a given target accuracy. 
+We show results using different subsets of the same statistical ensemble of trajectories in Fig. \ref{fig:scaling4}, 
+for $S$-wave overlaps in the left panel, for off-diagonal overlaps in the right panel.
+The 1S is obtained with better than 10\% accuracy already with about $10^4$ trajectories, but the higher $S$-waves 
+require at least a factor five more in statistics. 
+The off-diagonal overlaps generally require substantially more statistics. 
+Accessing the singlet $P$-wave from an initial singlet $S$-wave cannot be accomplished with fewer than three 
+jumps; hence, it requires in between at least two periods of evolution as an octet state between the jumps.
+For this reason, much more statistics is needed, and the final plateau may not have been reached even with 
+$2.5\times 10^5$ trajectories, although the convergence is visible in the plot. 
+The $D$-wave, which cannot be reached with fewer than two jumps still appears to converge more or less at a similar 
+rate as the excited $S$-waves. 
+Although these off-diagonal overlaps have substantially larger relative uncertainties than the $S$-waves, they are 
+suppressed at three order of magnitude, which renders them quantitatively irrelevant. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Conclusions}
+\label{sec:conclusions}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In this paper we introduced a code package called \qtraj that allows one to simulate the quantum dynamics of heavy-quarkonium states in the quark-gluon plasma.  In practice, the code uses a quantum unravelling of the Lindblad equation called the quantum trajectories algorithm to reduce the solution of the in-medium 3D Lindblad equation to solution of a one-dimensional Schr\"odinger equation along with stochastically sampled quantum jumps which can change the color and angular momentum numbers of the state.  The resulting 3D solution of the Lindblad equation allows one to compute the survival probabilities of heavy-quark bound states on a trajectory-by-trajectory basis.
+
+This paper provides detailed documentation for how to download, compile, and run in addition to providing the theoretical background for the algorithm itself.  We have compared results obtained using \qtraj using a variety of lattice sizes, lattice spacing, temporal step size, etc. demonstrating that it is possible to achieve control on the various sources of systematic uncertainty.  We also compare run times for the \qtraj code to standard matrix-based solvers available in the QuTiP 2 package finding that \qtraj allows one to efficiently solve the Lindblad equation on large lattices without having to impose an angular momentum cutoff.  The resulting code is embarrassingly parallel which allows the user to distribute the workload of generating independent quantum trajectories.  Associated with this paper the \qtraj code has been released publicly under a GPLv3 licence \cite{qtraj-download}.  Our goal in doing this is to assist other researchers who are studying open quantum systems approaches to heavy-quarkonium and perhaps other applications.
+
+\section*{Acknowledgments}
+
+We thank N. Brambilla and A. Vairo for a very fruitful  collaboration.
+M.E. received financial support from Xunta de Galicia (Centro singular de investigación de Galicia accreditation 2019-2022), the European Union ERDF, and the “María de Maeztu” Units of Excellence program MDM2016-0692 and the Spanish Research State Agency.
+M.S., A.I., and S.T. were supported by the U.S. Department of Energy, Office of Science, Office of Nuclear Physics Award No. DE-SC0013470. 
+M.S., A.I., and S.T. also thank the Ohio Supercomputer Center for computational time under the auspices of Project No. PGS0253. 
+J.H.W. was supported by the U.S. Department of Energy, Office of Science, Office of Nuclear Physics and Office of Advanced Scientific Computing Research within the framework of Scientific Discovery through Advance Computing (SciDAC) award Computing the Properties of Matter with Leadership Computing Resources. 
+J.H.W.’s research was also funded by the Deutsche Forschungsgemeinschaft (DFG, German Research Foundation) - Projektnummer 417533893/GRK2575 “Rethinking Quantum Field Theory”. 
+P.V. acknowledges support from the Bundesministerium für Bildung und Forschung project no. 05P2018 and the DFG cluster of excellence ORIGINS funded by the Deutsche Forschungsgemeinschaft under Germany’s Excellence Strategy - EXC-2094-390783311. 
+
+\appendix
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Packages required}
+\label{sec:requirements}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+In this appendix we provide installation instructions for the \qtraj package.  The code has been tested on Mac OSX 10.15+, Ubuntu 18+, and Red Hat Enterprise Linux 7+.  Below we provide installation instructions for the first two since these are more commonly used.  To begin, we list the external packages required to compile and run {\tt qTraj}.  The first requirement is a modern C++ compiler, e.g. GNU g++ or LLVM.  In addition to this, \qtraj requires:
+%
+\begin{enumerate}
+\item FFTW v3.3.8 or greater \cite{FFTW}.
+\item GNU GSL v2.6 or greater \cite{GSL}.
+\item Intel MKL v2020.3.279 or greater \cite{IntelOneAPI} {\bf OR} Armadillo 10.1.2 or greater \cite{Armadillo}.
+\end{enumerate}
+%
+Compilation and running of the unit tests associated with \qtraj requires:
+%
+\begin{enumerate}
+\item GoogleTest v1.10.0 or greater \cite{Googletest}.
+\item Cmake v3.19 \cite{cmake} or greater is required for GoogleTest compilation.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Installation of FFTW}
+\label{subsec:installfftw3}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\vspace{2mm}
+
+For Mac OSX, we recommend the installation of the Homebrew package manager \cite{homebrew}.  Once this package manager is installed you should be able to execute the following commands in the terminal:
+%
+\begin{verbatim}
+    $ brew install fftw3
+\end{verbatim}
+%
+For Ubuntu, one can use {\tt apt-get}:
+%
+\begin{verbatim}
+    $ sudo apt-get install fftw3-dev
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Installation of GSL}
+\label{subsec:installgsl}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\vspace{2mm}
+
+For Mac OSX:
+%
+\begin{verbatim}
+    $ brew install gsl
+\end{verbatim}
+%
+For Ubuntu, one can use {\tt apt-get}:
+%
+\begin{verbatim}
+    $ sudo apt-get install gsl-bin libgsl-dev
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Installation of Intel MKL}
+\label{subsec:installmkl}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\vspace{2mm}
+
+To download Intel MKL follow the link in Ref.~\cite{IntelOneAPI} and download and run the full installer for your operating system.  This will require registering for an account with Intel.  Once the installer has completed installation, add the following line to the end of your {\tt .profile} or {\tt .bash\_profile} startup script and restart your terminal afterwards.
+%
+\begin{verbatim}
+    source /opt/intel/oneapi/setvars.sh
+\end{verbatim}
+%
+If your MKL installation is in a non-standard location, adjust the path to the {\tt compilervars.sh} script appearing above, appropriately.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Installation of Armadillo}
+\label{subsec:installarmadillo}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\vspace{2mm}
+
+For Mac OSX:
+%
+\begin{verbatim}
+    $ brew install armadillo
+\end{verbatim}
+%
+For Ubuntu, one can use {\tt apt-get}:
+%
+\begin{verbatim}
+    $ sudo apt-get install liblapack-dev libblas-dev libboost-dev libarmadillo-dev
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Installation of GoogleTest}
+\label{subsec:installgtest}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\vspace{2mm}
+
+For Mac OSX use:
+%
+\begin{verbatim}
+    $ brew install cmake
+\end{verbatim}
+%
+and for Ubuntu use:
+%
+\begin{verbatim}
+    $ sudo apt-get install cmake
+\end{verbatim}
+%
+Once {\tt cmake} is installed download GoogleTest using {\tt git} or your favorite method from Ref.~\cite{Googletest}, e.g. {\tt git clone https://github.com/google/googletest}.  Then execute:
+%
+\begin{verbatim}
+    $ cd googletest
+    $ mkdir build
+    $ cd build
+    $ cmake ..
+    $ make
+    $ sudo make install
+\end{verbatim}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Scripts for large scale deployment}
+\label{sec:scripts}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+The {\tt scripts} directory in the main package contains some Torque Portable Batch System (PBS) \cite{openpbs} scripts and HTCondor \cite{condor} scripts that can assist with large scale deployment of the code in supercomputing environments:
+
+%
+\listingbox{%
+\dirtree{%
+.1 scripts.
+.2 arrayJob.pbs.
+.2 condorJob.sh.
+.2 condor.job.
+.2 scanImpactParameters.pbs.
+.2 singleJob.pbs.
+.2 manyTrajectories.pbs.
+}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Temperature file formats}
+\label{sec:formats}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\qtraj v1.0 supports two temperature file formats.  To activate these options the user can set the {\tt temperatureEvolution} parameter to 1 or 2.  For both of these options the file to load is specified by the {\tt temperatureFile} parameter.
+
+\subsection{Trajectory-averaged temperature format}
+\label{sec:formats1}
+\vspace{3mm}
+
+For option 1, the file pointed to by {\tt temperatureFile} should have the following format
+%
+\begin{lstlisting}[language=bash]
+# t [fm/c]  T [GeV]
+<NUMBER OF TAU POINTS>
+<TAU_1> <T_1> <ALPHA X_1> <ALPHA Y_1> <ALPHA Z_1> <LAMBDA_1>
+<TAU_2> <T_2> <ALPHA X_2> <ALPHA Y_2> <ALPHA Z_2> <LAMBDA_2>
+  .       .       .           .           .           . 
+  .       .
+  .       .       .           .           .           . 
+\end{lstlisting}
+%
+where $\tau$ is the proper time, $T$ is the temperature, and $\lambda$ is a temperature-like scale which corresponds to temperature in the equilibrium limit. The scale parameters $\alpha_{x,y,z}$ appear in the anisotropic distribution function \cite{Nopoush:2014pfa}
+%
+\begin{equation}
+f(p) = f_{\rm iso} \left(\frac{1}{\lambda}\sqrt{\sum_i \frac{p^2_i}{\alpha^2_i}+m^2}\right)\,\, ,
+\end{equation}
+%
+where $i ~\epsilon~\{x,y,z\}$ and $f_{\rm iso}$ is an isotropic distribution function which in thermal equilibrium is given by a Bose-Einstein distribution.
+%
+
+\subsection{Trajectory-based temperature format}
+\label{sec:formats2}
+\vspace{3mm}
+
+For option 2, the file pointed to by {\tt temperatureFile} should have the following format
+%
+\begin{lstlisting}[language=bash]
+<NUMBER OF METADATA ELEMENTS>
+<METADATA_1>
+    .
+    .
+<METADATA_N>
+<NUMBER OF TAU POINTS>
+<TAU_1> <T_1>
+<TAU_2> <T_2>
+  .       .
+  .       .
+  .       .
+\end{lstlisting}
+%
+As with option 1, $\tau$ is assumed to be in units of fm/c and $T$ is assumed to be in units of GeV.
+
+In practice, the metadata values are floating point numbers that represent data about the given trajectory which can be used in post-processing.  Canonically, there are 6 metadata elements and these record the following data for a given trajectory: 
+%
+\begin{enumerate}
+    \item{Impact Parameter in fm}
+    \item{Initial production point $x$ in fm}
+    \item{Initial production point $y$ in fm}
+    \item{Initial point $\eta$ (spatial rapidity)}
+    \item{Initial $p_T$ in GeV}
+    \item{Initial azimuthal angle $\phi$}
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Output file formats}
+\label{sec:outputformats}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Snapshot format}
+
+If the user sets the {\tt saveWavefunctions} parameter to 1 then snapshots of the wave-function are saved periodically to disk in files named {\tt snapshot\_<number>.tsv} where the number is the time step of the snapshot.  The format of these files is as follows
+%
+\begin{lstlisting}[language=bash]
+<R_1> <ABS_PSI_1> <RE_PSI_1> <IM_PSI_1>
+<R_2> <ABS_PSI_2> <RE_PSI_2> <IM_PSI_2>
+  .       
+  .
+  .
+\end{lstlisting}
+%
+where {\tt R} is the position in 1/GeV, {\tt ABS\_PSI} is $|\psi|$, {\tt RE\_PSI} is $\Re[\psi]$, and {\tt IM\_PSI} is $\Im[\psi]$.
+
+\subsection{Raios.tsv format}
+
+If the user sets the {\tt temperatureEvolution} parameter to 1 or 2, then the output file {\tt output/ratios.tsv} will contain rows of data in the following format 
+%
+\begin{lstlisting}[language=bash]
+<RAT_1S_1> <RAT_2S_1> <RAT_2P_1> <RAT_3S_1> <RAT_3P_1> <RAT_3D_1> <RAND_1> <INIT_L_1> 
+<RAT_1S_2> <RAT_2S_2> <RAT_2P_1> <RAT_3S_2> <RAT_3P_2> <RAT_3D_2> <RAND_2> <INIT_L_2>   
+  .       
+  .
+  .
+\end{lstlisting}
+
+If the user sets the temperatureEvolution parameter to 3, then the output file {\tt output/ratios.tsv} will contain rows of data in the following format 
+%
+\begin{lstlisting}[language=bash]
+<IP_1> <X_1>  <Y_1> <ETA_1> <PT_1> <PHI_1>
+<RAT_1S_1> <RAT_2S_1> <RAT_2P_1> <RAT_3S_1> <RAT_3P_1> <RAT_3D_1> <RAND_1> <INIT_L_1> 
+<IP_2> <X_2>  <Y_2> <ETA_2> <PT_2> <PHI_2>
+<RAT_1S_2> <RAT_2S_2> <RAT_2P_1> <RAT_3S_2> <RAT_3P_2> <RAT_3D_2> <RAND_2> <INIT_L_2>
+  .       
+  .
+  .
+\end{lstlisting}
+%
+where the following abbreviations have been used: RAT is the overlap ratio or raw overlap depending on the state in consideration,\footnote{Which output form is given for a given state depends on the initial overlap of the state.  In the case that there is a zero overlap in the initial condition, \qtraj records the final quantum mechanical overlap, otherwise the ratio of the final to initial quantum mechanical overlaps is recorded.} RAND is the first random number generated during the evolution, INIT\_L is the initial value of angular momentum quantum number $l$, IP is the impact parameter in fm, X, Y, and ETA are the initial X, Y, and spatial rapidity, ETA, production point for the physical trajectory, PT is the initial transverse momentum in GeV for the physical trajectory, and PHI is the initial azimuthal angle $\phi$ of the physical trajectory.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Supported potentials}
+\label{sec:potential}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Munich potential}
+\label{sec:munichpotential}
+From Eq. (\ref{eq:hamiltonian}), we can write down the combined Hamiltonian \cite{Brambilla:2017zei} for singlet and octet states as 
+%
+\begin{equation}
+  H = \left(\begin{array}{c c}
+h_s + \frac{1}{2}\,\gamma\,r^2& 0\\
+0 & h_o + \frac{7}{32}\,\gamma\,r^2
+\end{array}\right)\,\,,\label{E.1}
+\end{equation}
+%
+where
+%
+\begin{equation}
+    h_s = \frac{\mathbf{p}^2}{m} - C_F \frac{\alpha_s}{r} = \frac{\mathbf{p}^2}{m} - \frac{\alpha}{r}\,\,,
+\end{equation}
+%
+\begin{equation}
+  h_o = \frac{\mathbf{p}^2}{m} + \frac{\alpha_s}{2 N_C r}=\frac{\mathbf{p}^2}{m} + \frac{1}{8} \frac{\alpha}{r}\,\,.
+\end{equation}
+%
+with,  $N_C = 3$, $C_F = \frac{N^2_C - 2}{2(N_C^2-1)} = \frac{4}{3}$ , and $\alpha = C_F \,\alpha_s = \frac{4}{3}\alpha_s$.\\
+
+From Eq. (\ref{E.1}), we can write down the singlet Hamiltonian as 
+%
+\begin{equation}
+  H_s = h_s + \frac{1}{2}\,\gamma\,r^2 =\frac{\mathbf{p}^2}{m} -  \frac{\alpha}{r} + \frac{1}{2}\,\hat{\gamma}\,T^3 r^2 \,\,, \label{E.4}
+\end{equation}
+%
+and the octet Hamiltonian as 
+%
+\begin{equation}
+  H_o = h_o + \frac{7}{32}\,\gamma\,r^2 = \frac{\mathbf{p}^2}{m} +  \frac{1}{8}\frac{\alpha}{r} + \frac{7}{32}\,\hat{\gamma}\,T^3 r^2 \,\,,\label{E.5}
+\end{equation}
+%
+where $\gamma = \hat{\gamma}T^3$ with $-3.5 < \hat{\gamma} < 0$ \cite{Brambilla:2019tpt,Brambilla:2020qwo}.
+
+From Eq. (\ref{E.4}) and Eq. (\ref{E.5}), we extract real part of the singlet and octet potentials as %
+\begin{equation}
+V_R^s  (r) = -  \frac{\alpha}{r} + \frac{1}{2}\,\hat{\gamma}\,T^3 r^2 \,\,,
+\end{equation}
+%
+%
+\begin{equation}
+V_R^o  (r) = \frac{1}{8}\frac{\alpha}{r} + \frac{7}{32}\,\hat{\gamma}\,T^3 r^2 \,\,.
+\end{equation}
+%
+Now, we will use Eq. (C3) and Eq. (C6) of the Ref. \cite{Brambilla:2017zei}  to write down the imaginary part of the singlet and octet potentials respectively, i.e., 
+%
+\begin{equation}
+V_I^s  (r) = -\frac{1}{2}~\kappa ~r^2 = -\frac{1}{2}~\hat{\kappa}~T^3 r^2\,\,,
+\end{equation}
+%
+and
+%
+\begin{equation}
+V_I^o (r)  = -\frac{1}{4}.\frac{N^2_C-2}{N^2_C-1}~\kappa ~r^2 = -\frac{7}{32}~\kappa ~r^2 = -\frac{7}{32}~\hat{\kappa}~T^3 r^2\,\,,
+\end{equation}
+%
+where $\kappa = \hat{\kappa} T^3$.  The next-to-leading-order perturbative expansion of $\hat{\kappa}$ is defined by Eq. (C4) of Ref. \cite{Brambilla:2017zei}. We use a parameterization of this result which is fit to lattice data. The resulting parameterization for $\hat{\kappa}$ is given by \cite{Brambilla:2017zei}
+%
+\be
+\hat{\kappa} =
+\begin{cases}  
+	\left(0.00397x^{3/2} - 0.08341x + 0.98031x^{1/2} - 0.51889\right)^{-1} &\mbox{in case of central limit fit} \\
+	\left(0.00712x^{3/2} - 0.14262x + 1.55601x^{1/2} - 0.80712\right)^{-1} &\mbox{in case of lower limit fit} \\
+	\left(0.00272x^{3/2} - 0.05854x + 0.71513x^{1/2} - 0.38197\right)^{-1} &\mbox{in case of upper limit fit} 
+\end{cases} \, ,
+\ee
+%
+where, $x = T/T_C$. In Fig.~\ref{fig:kappaHat} we plot $\hat\kappa$ as a function of the temperature in units of $T_c$, where $T_c$ = 155 MeV.
+
+%-----------------------------------------------
+\begin{figure}[t]
+\begin{center}
+\includegraphics[width=0.45\linewidth]{figures/kappaHat.pdf}
+\end{center}
+\caption{Plot of $\hat\kappa$ as a function of the temperature in units of $T_c$, where $T_c$ = 155 MeV; based on data from Ref.~\cite{Brambilla:2020siz}.}
+\label{fig:kappaHat}
+\end{figure}
+%-----------------------------------------------
+
+The resulting complex-valued potentials for singlet and octet states are 
+%
+\be
+V^s_{\rm Munich} (r) = V^s_R (r) + i V^s_I (r) \, , 
+\ee
+%
+and
+%
+\be
+V^o_{\rm Munich} (r) = V^o_R (r) + i V^o_I (r) \, ,
+\ee
+%
+respectively.
+
+\subsection{Isotropic KSU potential}
+\label{sec:isoksupotential}
+
+For the KSU potential we make use of a Karsch-Mehr-Satz type potential based on the internal energy~\cite{Karsch:1987pv,Dumitru:2009ni,Strickland:2011aa}
+%
+\begin{equation}
+V^{\mathrm{iso}}_{\mathrm{KMS}}(r)=-\frac{a}{r}(1+ m_D r)e^{-m_D  r}+\frac{2\sigma}{m_D }\left[1-e^{-m_D  r}\right]-\sigma r e^{-m_D  r} ~,
+\end{equation}
+%
+where \mbox{$a = 0.409$} is the effective coupling, \mbox{$\sigma = 0.21$~GeV$^2$} is the string tension, and the isotropic Debye mass is defined by 
+%
+\begin{equation}
+m_D(T)=F_{m_D}T\sqrt{N_c\left(1+\frac{N_F}{6}\right)\pi\alpha}~,~~\alpha = \frac{4}{3}\alpha_s (2\pi T)~,
+\end{equation}
+%
+where $F_{m_D}$ is an adjustable factor called $m_D$-factor and $\alpha_s(5\text{ GeV}) = 0.2034$~\cite{McNeile:2010ji} is the strong coupling.
+
+For the imaginary part of the model potential we use the result obtained from leading-order finite temperature perturbation theory~\cite{Laine:2006ns}
+%
+\begin{equation} 
+V^{\mathrm{iso}}_{\mathrm{I}}(r) = - \alpha_s C_F T \phi(\hat{r}) \, ,
+\end{equation}
+%
+where $\hat{r} \equiv m_D r$, and
+%
+\begin{equation}
+ \phi(\hat{r}) \equiv 2\int_0^{\infty}dz \frac{
+z}{(z^2+1)^2} \left[1-\frac{\sin(z\, \hat{r})}{z\, \hat{r}}\right] .
+\end{equation}
+%
+In vacuum we take the heavy-quark potential to be given by a Cornell potential with a finite string breaking distance
+%
+\be
+V_{\rm vac}(r) =
+\begin{cases}  
+	-\frac{a}{r} + \sigma r &\mbox{if } r \leq r_{\rm SB} \\
+	-\frac{a}{r_{\rm SB} } + \sigma r_{\rm SB}   & \mbox{if } r > r_{\rm SB}
+\end{cases} \, ,
+\label{eq:vvac}
+\ee
+%
+where \mbox{$r_{\rm SB}  =$ 1.25 fm} is the string breaking distance.
+To match smoothly onto the zero temperature limit we use
+%
+\begin{equation}
+V^{\rm iso}_R (r)=
+\begin{cases}  V^{\rm iso}_{\rm KMS}(r)  &\mbox{if } V^{\rm iso}_{\rm KMS}(r)  \leq V_{\rm vac}(r_{\rm SB}) \\
+V_{\rm vac}(r_{\rm SB}) & \mbox{if } V^{\rm iso}_{\rm KMS}(r) > V_{\rm vac}(r_{\rm SB})
+\end{cases} \, .
+\end{equation}
+%
+
+The resulting final isotropic complex-valued KSU potential is of the form 
+%
+\begin{equation}
+V^{\rm iso}_{\rm KSU} (r) = V^{\rm iso}_R (r) + i V^{\rm iso}_I (r) \, .
+\end{equation}
+%
+
+\subsection{Anisotropic KSU potential}
+\label{sec:anisoksupotential}
+
+After considering the ``minimal'' extension \cite{Dumitru:2009ni} of the internal energy based isotropic KMS potential \cite{Karsch:1987pv,Strickland:2011aa}, we write down the real part of the anisotropic KMS potential
+%
+\begin{equation}
+V^{\mathrm{aniso}}_{\mathrm{KMS}}(r)=-\frac{a}{r}(1+\mu r)e^{-\mu r}+\frac{2\sigma}{\mu}\left[1-e^{-\mu r}\right]-\sigma r e^{-\mu r} ~,
+\end{equation}
+%
+where $\mu$ is the anisotropic screening scale (anisotropic Debye mass) defined via
+%
+\begin{equation}
+\mu^2(\xi, T) = f(\xi) m^2_D(T) ~.\label{mumd}
+\end{equation}
+%
+The function $f(\xi)$ in Eq.(\ref{mumd}) is given by \cite{Strickland:2018ayk} 
+%
+\begin{equation}
+f(\xi)=\frac{\sqrt{2}(1+\xi)\arcsin{\left(\sqrt{\frac{\xi}{1+\xi}}\right)}}{\sqrt{\xi}\sqrt{1+\xi+\frac{(1+\xi)^2 \arcsin{\left(\sqrt{\frac{\xi}{1+\xi}}\right)}}{\sqrt{\xi}}}}~,\label{ffunc}
+\end{equation}
+%
+which has the following properties
+%
+\begin{equation}
+\lim_{\xi \rightarrow 0}f(\xi) = 1-\frac{2}{45}\xi^2 + \frac{44}{945}\xi^3 - \frac{8}{189}\xi^4 + {\cal O}\left(\xi\right)^{9/2}~,
+\end{equation}
+%
+and
+%
+\begin{equation}
+\lim_{\xi \rightarrow \infty}f(\xi) = \sqrt{\pi}\left(\frac{1}{\xi}\right)^{1/4} - \frac{2}{\sqrt{\pi}}\left(\frac{1}{\xi}\right)^{3/4} + \frac{4}{3\sqrt{\pi}}\left(\frac{1}{\xi}\right)^{7/4} + {\cal O}\left(\frac{1}{\xi}\right)^{9/4}~,
+\end{equation}
+%
+in the small and large-$\xi$ limit respectively.
+
+When $\xi$ is negative, we use 
+%
+\begin{equation}
+f(\xi) = \frac{\sqrt{2}\arcsinh{\left(\sqrt{\frac{\abs{\xi}}{1-\abs{\xi}}}~\right)}}{\abs{\xi}^{1/4}\sqrt{\frac{\sqrt{\abs{\xi}}}{1-\abs{\xi}}+\arcsinh{\left(\sqrt{\frac{\abs{\xi}}{1-\abs{\xi}}}~\right)}}}~~,~\mathrm{when}~~\xi< 0 ~.
+\end{equation}
+%
+For the imaginary part of the potential we use \cite{islamforth}
+%
+\begin{equation}
+V^{\rm aniso}_I (r) = - \frac{\alpha_s C_F \lambda \phi (\hat{r})}{ \sqrt{1 + \frac{\xi}{3}} } \, ,
+\label{eq:allanisoimv}
+\end{equation}
+%
+with $\hat{r} = m_D(\lambda) r$ and $m_D(\lambda)=F_{m_D}\lambda~\sqrt{N_c\left(1+\frac{N_F}{6}\right)\pi\alpha}$ .\\
+To match smoothly onto the zero temperature limit we use
+%
+\begin{equation}
+V^{\rm aniso}_R (r)=
+\begin{cases}  V^{\rm aniso}_{\rm KMS}(r)  &\mbox{if } V^{\rm aniso}_{\rm KMS}(r)  \leq V_{\rm vac}(r_{\rm SB}) \\
+V_{\rm vac}(r_{\rm SB}) & \mbox{if } V^{\rm aniso}_{\rm KMS}(r) > V_{\rm vac}(r_{\rm SB})
+\end{cases} \, .
+\label{eq:vmedre}
+\end{equation}
+%
+The resulting final anisotropic complex-valued KSU potential is of the form 
+%
+\begin{equation}
+V^{\rm aniso}_{\rm KSU}  (r) = V^{\rm aniso}_R (r) + i V^{\rm aniso}_I (r) \, .
+\label{eq:vform}
+\end{equation}
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\newpage
+%\noindent 
+%{\bf Program Summary}
+%\label{sec:notebooks}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%\begin{small}
+%\noindent
+%{\em Program Title: \qtraj} \\
+%{\em CPC Library link to program files:} (to be added by Technical Editor) \\
+%{\em Developer's repository link:} https://bitbucket.org/kentphysics/qtraj-fftw \\
+%{\em Code Ocean capsule:} (to be added by Technical Editor)\\
+%{\em Licensing provisions(please choose one):} GPLv3 \\
+%{\em Programming language:} C  \\
+%{\em Supplementary material:}  \\  % Fill in if necessary, otherwise leave out.
+%{\em Nature of problem(approx. 50-250 words):}\\
+%  \redflag{Describe the nature of the problem here.} \\
+%{\em Solution method(approx. 50-250 words):}\\
+%  \redflag{Describe the method solution here.}
+%{\em Additional comments including restrictions and unusual features (approx. 50-250 words):}\\
+% \redflag{Provide any additional comments here} \\
+%\end{small}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bibliographystyle{model1-num-names}
+\bibliography{qtraj-fftw}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\end{document}

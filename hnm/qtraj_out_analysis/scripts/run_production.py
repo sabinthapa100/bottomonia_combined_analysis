@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Optional, Sequence
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -15,6 +16,11 @@ if str(PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(PACKAGE_ROOT))
 
 from qtraj_analysis.observable_registry import list_observable_ids  # noqa: E402
+from qtraj_analysis.production_validation import (  # noqa: E402
+    validate_lhc_acceptance_scan,
+    validate_pbpb2760_double_ratio_parity,
+    validate_pbpb5023_ratio32vspt,
+)
 from qtraj_analysis.reference_data import build_reference_bundle  # noqa: E402
 from qtraj_analysis.reference_output import plot_bundle, save_bundle, save_system_summary  # noqa: E402
 
@@ -36,6 +42,29 @@ SYSTEM_OUTPUT_DIRS = {
     "pbpb2760": ("LHC", "PbPb2p76TeV"),
     "pbpb5023": ("LHC", "PbPb5p02TeV"),
 }
+
+
+def _resolve_output_root(output_root: Optional[str]) -> Path:
+    out_root = Path(output_root or "outputs/qtraj_outputs")
+    if not out_root.is_absolute():
+        out_root = (REPO_ROOT / out_root).resolve()
+    return out_root
+
+
+def _write_validation_report(
+    *,
+    system_key: str,
+    filename: str,
+    payload: dict,
+    output_root: Optional[str],
+    logger: logging.Logger,
+) -> None:
+    collider, system_dir = SYSTEM_OUTPUT_DIRS[system_key]
+    validation_dir = _resolve_output_root(output_root) / collider / system_dir / "production" / "validation"
+    validation_dir.mkdir(parents=True, exist_ok=True)
+    path = validation_dir / filename
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    logger.info("Saved %s validation -> %s", system_key, path)
 
 
 def add_common_arguments(
@@ -87,10 +116,14 @@ def _select_ids(system_key: str, observable_id: Optional[str]) -> list[str]:
     if system_key == "all":
         return list(list_observable_ids())
     prefix = SYSTEM_PREFIXES[system_key]
-    return [observable for observable in list_observable_ids() if observable.startswith(prefix)]
+    return [
+        observable for observable in list_observable_ids() if observable.startswith(prefix)
+    ]
 
 
-def _source_labels_from_kappa(system_key: str, kappa_values: Optional[Sequence[int]]) -> Optional[list[str]]:
+def _source_labels_from_kappa(
+    system_key: str, kappa_values: Optional[Sequence[int]]
+) -> Optional[list[str]]:
     if not kappa_values:
         return None
     if system_key == "all":
@@ -101,7 +134,9 @@ def _source_labels_from_kappa(system_key: str, kappa_values: Optional[Sequence[i
     for value in kappa_values:
         if value not in mapping:
             allowed = ", ".join(str(kappa) for kappa in sorted(mapping))
-            raise ValueError(f"Unsupported kappa {value} for {system_key}; allowed values: {allowed}")
+            raise ValueError(
+                f"Unsupported kappa {value} for {system_key}; allowed values: {allowed}"
+            )
         labels.append(mapping[value])
     return labels
 
@@ -151,7 +186,9 @@ def run_export(
             outputs = plot_bundle(bundle, logger, output_root=output_root)
             if outputs is not None:
                 figure_pdf, figure_png = outputs
-                logger.info("Saved %s plots -> %s, %s", current_id, figure_pdf, figure_png)
+                logger.info(
+                    "Saved %s plots -> %s, %s", current_id, figure_pdf, figure_png
+                )
 
         artifacts_by_observable[current_id] = {
             "manifest": saved["manifest"],
@@ -169,13 +206,47 @@ def run_export(
             bundle.observable_id: artifacts_by_observable[bundle.observable_id]
             for bundle in bundle_list
         }
-        summary_paths = save_system_summary(bundle_list, system_artifacts, output_root=output_root)
+        summary_paths = save_system_summary(
+            bundle_list, system_artifacts, output_root=output_root
+        )
         logger.info(
             "Saved %s %s summary -> %s, %s",
             system_id[0],
             system_id[1],
             summary_paths["json"],
             summary_paths["csv"],
+        )
+
+    if system_key in {"all", "pbpb5023"}:
+        _write_validation_report(
+            system_key="pbpb5023",
+            filename="pbpb5023_ratio32vspt_source_lock.json",
+            payload=validate_pbpb5023_ratio32vspt(logger),
+            output_root=output_root,
+            logger=logger,
+        )
+        _write_validation_report(
+            system_key="pbpb5023",
+            filename="pbpb5023_acceptance_scan.json",
+            payload=validate_lhc_acceptance_scan("pbpb5023", logger),
+            output_root=output_root,
+            logger=logger,
+        )
+
+    if system_key in {"all", "pbpb2760"}:
+        _write_validation_report(
+            system_key="pbpb2760",
+            filename="pbpb2760_double_ratio_parity.json",
+            payload=validate_pbpb2760_double_ratio_parity(logger),
+            output_root=output_root,
+            logger=logger,
+        )
+        _write_validation_report(
+            system_key="pbpb2760",
+            filename="pbpb2760_acceptance_scan.json",
+            payload=validate_lhc_acceptance_scan("pbpb2760", logger),
+            output_root=output_root,
+            logger=logger,
         )
 
     return 0

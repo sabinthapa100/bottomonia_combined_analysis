@@ -31,7 +31,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         system_key="pbpb5023",
         observable_id=args.observable_id,
         skip_plots=args.skip_plots,
+        clean=args.clean,
         kappa_values=args.kappa,
+        output_root=args.output_root,
         logger=logger,
     )
 

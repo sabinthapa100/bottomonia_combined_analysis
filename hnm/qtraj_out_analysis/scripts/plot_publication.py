@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import argparse
 from pathlib import Path
 
 import numpy as np
@@ -91,24 +92,26 @@ def get_exp_label(filename, obs_id):
     # Find experiment name
     exp = parts[0].upper() if parts else name
     # Find state
-    if "upsilon_3s" in name:
-        state = r"$\Upsilon(3S)$"
-    elif "upsilon_2s" in name:
-        state = r"$\Upsilon(2S)$"
-    elif "upsilon_1s" in name:
-        state = r"$\Upsilon(1S)$"
+    if "upsilon_2s_3s_upsilon_1s" in name:
+        state = r"$(\Upsilon(2S)+\Upsilon(3S))/\Upsilon(1S)$"
+    elif "upsilon_3s_upsilon_2s" in name:
+        state = r"$\Upsilon(3S)/\Upsilon(2S)$"
+    elif "upsilon_3s_upsilon_1s" in name:
+        state = r"$\Upsilon(3S)/\Upsilon(1S)$"
+    elif "upsilon_2s_upsilon_1s" in name:
+        state = r"$\Upsilon(2S)/\Upsilon(1S)$"
     elif "star_y_3s" in name:
         state = r"$\Upsilon(3S)$"
     elif "star_y_2s" in name:
         state = r"$\Upsilon(2S)$"
     elif "star_y_1s" in name:
         state = r"$\Upsilon(1S)$"
-    elif "2s_upsilon_1s" in name:
-        state = r"$\Upsilon(2S)/\Upsilon(1S)$"
-    elif "3s_upsilon_1s" in name:
-        state = r"$\Upsilon(3S)/\Upsilon(1S)$"
-    elif "3s_upsilon_2s" in name:
-        state = r"$\Upsilon(3S)/\Upsilon(2S)$"
+    elif "upsilon_3s" in name:
+        state = r"$\Upsilon(3S)$"
+    elif "upsilon_2s" in name:
+        state = r"$\Upsilon(2S)$"
+    elif "upsilon_1s" in name:
+        state = r"$\Upsilon(1S)$"
     else:
         state = name
     return f"{exp} {state}"
@@ -126,6 +129,21 @@ def get_exp_short(filename):
     if "star" in name:
         return "star"
     return "unknown"
+
+
+def get_exp_kind(filename):
+    """Return stat/sys/total from exported experiment filename."""
+    stem = filename.replace("__exp.csv", "")
+    if stem.endswith("_stat"):
+        return "stat"
+    if stem.endswith("_sys"):
+        return "sys"
+    return "total"
+
+
+def is_upper_limit_series(data):
+    """Upper-limit exports carry zero-sized y-errors in the canonical CSV."""
+    return np.allclose(data["yerr_low"], 0.0) and np.allclose(data["yerr_high"], 0.0)
 
 
 def draw_theory_step(ax, x, y, label, color, lw=1.8, ls="-", alpha=0.9):
@@ -180,6 +198,75 @@ def draw_exp(ax, x, y, yerr_lo, yerr_hi, exp_short, label, xerr_lo=None, xerr_hi
         label=label,
         zorder=5,
     )
+
+
+def draw_exp_double_ratio(
+    ax, data, exp_short, label, *, kind="total", xerr_lo=None, xerr_hi=None
+):
+    """Match the canonical paper style: sys bars only, stat bars with markers, upper limits as triangles."""
+    s = EXP_STYLES.get(exp_short, EXP_STYLES["cms"])
+    if xerr_lo is not None and xerr_hi is not None:
+        xerr = np.vstack([xerr_lo, xerr_hi])
+    else:
+        xerr = None
+
+    if is_upper_limit_series(data):
+        ax.scatter(
+            data["x"],
+            data["y"],
+            marker="v",
+            s=44,
+            color=s["color"],
+            edgecolors=s["color"],
+            linewidths=0.9,
+            label=label,
+            zorder=5,
+        )
+        return
+
+    yerr = np.vstack([data["yerr_low"], data["yerr_high"]])
+    if kind == "sys":
+        ax.errorbar(
+            data["x"],
+            data["y"],
+            xerr=xerr,
+            yerr=yerr,
+            fmt="none",
+            color=s["color"],
+            ecolor=s["color"],
+            capsize=3,
+            capthick=1,
+            linewidth=1,
+            zorder=3,
+        )
+        return
+
+    ax.errorbar(
+        data["x"],
+        data["y"],
+        xerr=xerr,
+        yerr=yerr,
+        fmt=s["marker"],
+        color=s["color"],
+        ecolor=s["color"],
+        mfc=s["mfc"],
+        mec=s["color"],
+        ms=s["ms"],
+        mew=s["mew"],
+        capsize=3,
+        capthick=1,
+        linestyle="none",
+        linewidth=1,
+        label=label,
+        zorder=5,
+    )
+
+
+def add_legend_if_present(ax, **kwargs):
+    """Avoid matplotlib warnings on panels with no labeled artists."""
+    handles, labels = ax.get_legend_handles_labels()
+    if labels:
+        ax.legend(**kwargs)
 
 
 def find_theory(base, obs_id, state):
@@ -253,7 +340,7 @@ def plot_raa_npart(base, obs_id, title, outdir):
         ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
         ax.set_ylim(bottom=0.0)
         ax.grid(alpha=0.15, lw=0.5)
-        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
+        add_legend_if_present(ax, fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
 
     fig.suptitle(title, fontsize=14, y=1.02)
     fig.tight_layout()
@@ -309,7 +396,7 @@ def plot_raa_pt(base, obs_id, title, outdir):
         ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
         ax.set_ylim(bottom=0.0)
         ax.grid(alpha=0.15, lw=0.5)
-        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
+        add_legend_if_present(ax, fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
 
     fig.suptitle(title, fontsize=14, y=1.02)
     fig.tight_layout()
@@ -353,7 +440,7 @@ def plot_raa_y(base, obs_id, title, outdir):
         ax.set_title(STATE_LABELS.get(state, state), fontsize=13)
         ax.set_ylim(bottom=0.0)
         ax.grid(alpha=0.15, lw=0.5)
-        ax.legend(fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
+        add_legend_if_present(ax, fontsize=7, loc="upper right", framealpha=0.9, ncol=1)
 
     fig.suptitle(title, fontsize=14, y=1.02)
     fig.tight_layout()
@@ -397,20 +484,20 @@ def plot_double_ratios(
 
         # Experiments
         exp_files = find_experiments(base, obs_id)
+        exp_files = sorted(exp_files, key=lambda f: {"sys": 0, "stat": 1, "total": 2}.get(get_exp_kind(f), 2))
         for ef in exp_files:
             d = read_exp(os.path.join(base, "data", "comparison", "experiment", ef))
             short = get_exp_short(ef)
             label = get_exp_label(ef, obs_id)
+            kind = get_exp_kind(ef)
             xerr_lo = d["x"] - d["x_low"] if "x_low" in d.dtype.names else None
             xerr_hi = d["x_high"] - d["x"] if "x_high" in d.dtype.names else None
-            draw_exp(
+            draw_exp_double_ratio(
                 ax,
-                d["x"],
-                d["y"],
-                d["yerr_low"],
-                d["yerr_high"],
+                d,
                 short,
-                label,
+                label if kind != "sys" else None,
+                kind=kind,
                 xerr_lo=xerr_lo,
                 xerr_hi=xerr_hi,
             )
@@ -421,7 +508,7 @@ def plot_double_ratios(
         ax.set_title(STATE_LABELS.get(state, state), fontsize=12)
         ax.set_ylim(bottom=0.0)
         ax.grid(alpha=0.15, lw=0.5)
-        ax.legend(fontsize=7, loc="upper right", framealpha=0.9)
+        add_legend_if_present(ax, fontsize=7, loc="upper right", framealpha=0.9)
 
     fig.suptitle(title, fontsize=14, y=1.02)
     fig.tight_layout()
@@ -444,13 +531,11 @@ def _save(fig, outdir, name):
     print(f"  ✓ {name} → {pdf}")
 
 
-def run_all():
-    logging.basicConfig(level=logging.WARNING)
-
-    systems = [
+def _system_configs():
+    return [
         {
             "key": "pbpb5023",
-            "title": "PbPb 5.02 TeV",
+            "title": r"$\mathbf{\mathrm{Pb{+}Pb}\ \sqrt{s_{\rm NN}} = 5.02\ TeV}$",
             "outdir": str(
                 REPO_ROOT
                 / "outputs"
@@ -474,7 +559,7 @@ def run_all():
         },
         {
             "key": "pbpb2760",
-            "title": "PbPb 2.76 TeV",
+            "title": r"$\mathbf{\mathrm{Pb{+}Pb}\ \sqrt{s_{\rm NN}} = 2.76\ TeV}$",
             "outdir": str(
                 REPO_ROOT
                 / "outputs"
@@ -492,7 +577,7 @@ def run_all():
         },
         {
             "key": "auau200",
-            "title": "AuAu 200 GeV",
+            "title": r"$\mathbf{\mathrm{Au{+}Au}\ \sqrt{s_{\rm NN}} = 200\ GeV}$",
             "outdir": str(
                 REPO_ROOT
                 / "outputs"
@@ -510,6 +595,16 @@ def run_all():
         },
     ]
 
+
+def run_selected(system_keys=None):
+    logging.basicConfig(level=logging.WARNING)
+    requested = None if not system_keys or "all" in system_keys else set(system_keys)
+    systems = [
+        sys_cfg
+        for sys_cfg in _system_configs()
+        if requested is None or sys_cfg["key"] in requested
+    ]
+
     for sys_cfg in systems:
         base = SYSTEM_BASES[sys_cfg["key"]]
         outdir = sys_cfg["outdir"]
@@ -520,7 +615,7 @@ def run_all():
 
         for plot_name, (obs_id, plot_func) in sys_cfg["plots"].items():
             try:
-                plot_func(base, obs_id, f"{title} — {obs_id.replace('_', ' ')}", outdir)
+                plot_func(base, obs_id, title, outdir)
             except Exception as e:
                 print(f"  ✗ {obs_id}: {e}")
 
@@ -534,7 +629,7 @@ def run_all():
                     dr.get("obs_21_pt", ""),
                     dr.get("obs_31_npart", ""),
                     dr.get("obs_32_pt", ""),
-                    f"{title} — Double Ratios",
+                    title,
                     outdir,
                 )
             except Exception as e:
@@ -545,5 +640,25 @@ def run_all():
     print(f"{'=' * 60}")
 
 
+def run_all():
+    run_selected(None)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Generate publication/thesis-ready PbPb/AuAu figures from canonical production outputs."
+    )
+    parser.add_argument(
+        "--system",
+        nargs="+",
+        choices=("all", "pbpb5023", "pbpb2760", "auau200"),
+        default=("all",),
+        help="Which systems to render. Default: all",
+    )
+    args = parser.parse_args(argv)
+    run_selected(args.system)
+    return 0
+
+
 if __name__ == "__main__":
-    run_all()
+    raise SystemExit(main())

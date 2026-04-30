@@ -1,0 +1,76 @@
+#PBS -l walltime=12:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=300mb
+#PBS -t 1-200
+#PBS -N qtraj
+#PBS -j oe
+#PBS -A PGS0253
+
+module load fftw3
+
+# number of quantum trajectories per impact parameter for each job
+# total number of trajectories is the size of job array times this number
+NTRAJ=512
+
+# impact parameter list
+blist=("0" "2.32326" "4.24791" "6.00746" "7.77937" "9.21228" "10.4493" "11.5541" "12.5619" "13.4945" "14.3815")
+nb=$((${#blist[@]}))
+
+echo "Processing ${nb} impact parameters"
+
+if [ -n "${ID}" ]; then
+  echo "ID  = ${ID}"
+  JOBID=${ID}
+else
+  echo "Usage qsub -v ID=<job-id> ./scripts/scanImpactParameters.pbs"
+  exit
+fi
+
+# set local id
+let ID=$PBS_ARRAYID-1 # set to pbs array id -1
+
+# check if output dir exists; if not, create it
+[ ! -d $PBS_O_WORKDIR/output-${JOBID} ] && mkdir $PBS_O_WORKDIR/output-${JOBID}
+
+for  (( j=0; j<$nb; j++ ))
+do
+    b=${blist[$j]}
+    TEMPERATUREFILE="./input/temperature/averageTemperature_${b}.txt"
+    echo "Using ${TEMPERATUREFILE}"
+
+    # go to tmp working space
+    cd $TMPDIR
+    mkdir ${b}
+    cd ${b}
+
+    # setup run directory structure
+    mkdir input
+    mkdir input/temperature
+    cp $PBS_O_WORKDIR/input/params.txt ./input/
+    cp $PBS_O_WORKDIR/${TEMPERATUREFILE} ./input/temperature
+    cp $PBS_O_WORKDIR/qtraj .
+
+    echo "Making ${NTRAJ} runs"
+
+    # run the code
+    ./qtraj -dirnameWithSeed 1 -nTrajectories ${NTRAJ} -temperatureEvolution 1 -temperatureFile ${TEMPERATUREFILE} > log-${ID}-${j}.txt 2> err-${ID}-${j}.txt
+
+    echo "Done."
+
+    # finished with this impact param, so copy output and log files back
+    
+    # get lock to prevent process "collision" since multiple machines are processing each b value
+    exec 200> $PBS_O_WORKDIR/output-${JOBID}/.lock-${b}
+    flock 200
+
+    # make output directory for this impact parameter
+    [ ! -d $PBS_O_WORKDIR/output-${JOBID}/${b} ] && mkdir $PBS_O_WORKDIR/output-${JOBID}/${b}
+    cat  output-*/ratios.tsv | gzip >> ratios-${b}.gz
+    cat ratios-${b}.gz >> $PBS_O_WORKDIR/output-${JOBID}/${b}/ratios.gz
+    cp input/params.txt $PBS_O_WORKDIR/output-${JOBID}/${b}/params.txt
+
+    # release lock
+    flock -u 200
+    exec 200>&-
+
+done

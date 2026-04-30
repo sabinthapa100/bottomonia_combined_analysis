@@ -1,0 +1,84 @@
+#PBS -l walltime=12:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=300MB
+#PBS -t 1-100
+#PBS -N qtraj-trajectory
+#PBS -j oe
+#PBS -A PGS0253
+
+module load fftw3
+
+# number of phyical trajectories to sample
+NPTRAJ=150000
+
+# number of quantum trajectories to sample per physical trajectory
+NQTRAJ=20
+
+# get job id from pbs job id
+IFS='[' # space is set as delimiter
+read -ra ADDR <<< "$PBS_JOBID" 
+IFS=' '
+JOBID=${ADDR[0]}
+
+# get lock
+#exec 100> $PBS_O_WORKDIR/.lock-${JOBID}
+#flock 100 
+
+# check if output dir exists; if not, create it
+[ ! -d $PBS_O_WORKDIR/output-${JOBID} ] && mkdir $PBS_O_WORKDIR/output-${JOBID}
+
+# release lock
+#flock -u 100
+#exec 100>&-
+
+# go to tmp working space
+cd $TMPDIR
+
+# setup local directory structure
+mkdir ./input
+mkdir ./input/runset
+
+# setup run directory structure
+cp $PBS_O_WORKDIR/input/params.txt ./input
+cp $PBS_O_WORKDIR/input/basisfunctions*.tsv ./input
+cp $PBS_O_WORKDIR/qtraj .
+
+# extract trajectories
+cd input/runset
+# use shuf to return unique list of NPTRAJ files from the tgz
+tar -ztf $PBS_O_WORKDIR/input/runset/trajectories.tgz | shuf -n ${NPTRAJ} > trajectoryList.txt
+echo "Extracting trajectories"
+tar -xzf $PBS_O_WORKDIR/input/runset/trajectories.tgz --warning=no-timestamp --files-from trajectoryList.txt
+rm trajectoryList.txt
+echo "Done extracting trajectories"
+# return to main directory of tmp space
+cd ../..
+
+echo "Running qtraj"
+
+# used for log file labelling
+cnt=0
+
+for file in ./input/runset/*
+do
+    echo "Running with $file"
+    # run the code first for l=0 then for l=1
+    ./qtraj -initL 0 -nTrajectories ${NQTRAJ} -temperatureEvolution 2 -temperatureFile $file >> /dev/null #> log_0_${cnt}.txt 2> err_0_${cnt}.txt
+    ./qtraj -initL 1 -nTrajectories ${NQTRAJ} -temperatureEvolution 2 -temperatureFile $file >> /dev/null #> log_1_${cnt}.txt 2> err_1_${cnt}.txt
+    cnt=$((cnt+1))
+done
+
+# get lock
+#exec 200> $PBS_O_WORKDIR/output-${JOBID}/.lock
+#flock 200 
+
+# append results to end of file and copy back to host
+# cp log* $PBS_O_WORKDIR/output-${JOBID}/
+# cp err* $PBS_O_WORKDIR/output-${JOBID}/
+#wc output*/ratios.tsv
+cat output*/ratios.tsv | gzip >> datafile.gz
+cat datafile.gz >> $PBS_O_WORKDIR/output-${JOBID}/datafile.gz
+
+# release lock
+#flock -u 200
+#exec 200>&-

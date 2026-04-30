@@ -1,0 +1,17 @@
+# 1) Prep
+sbatch scripts/prep_bundles.sh \
+  --export=ALL,TAR_PATH=/path/to/5TeV/trajectories.tgz,BUNDLE_SIZE=4096
+
+# 2) Run array
+MANIFEST="$SCRATCH/$(basename $PWD)/traj_info/manifest.txt"
+NBUNDLES=$(wc -l < "$MANIFEST")
+sbatch -C cpu -q regular -t 01:00:00 \
+  --array=0-$((NBUNDLES-1))%64 \
+  --export=ALL,MANIFEST="$MANIFEST",NQTRAJ=20,LOCALIZE_TAR=1,TASK_TIMEOUT=1800s,RETRIES=3 \
+  scripts/qtraj_runs.sh
+
+# 3) Combine when done
+OUTDIR=$(ls -1dt $SCRATCH/$(basename $PWD)/collect_* | head -n1)
+MANIFEST="$SCRATCH/$(basename $PWD)/traj_info/manifest.txt"
+./scripts/combine_runs.sh OUTDIR="$OUTDIR" MANIFEST="$MANIFEST"
+

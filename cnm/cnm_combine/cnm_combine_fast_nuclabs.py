@@ -269,11 +269,18 @@ def rpa_binned_batch_driver(
     device = EC._qp_device(qp_base)
     
     labels = [f"{int(a)}-{int(b)}%" for (a,b) in cent_bins]
-    L_by = glauber.leff_bins_pA(cent_bins, method="optical")
+    is_AA = (getattr(qp_base, "system", "pA") == "AA")
+    if is_AA:
+        L_by = glauber.leff_bins_AA(cent_bins)
+    else:
+        L_by = glauber.leff_bins_pA(cent_bins, method="optical")
     Leff = [float(L_by[lab]) for lab in labels]
     
     # Weights for MB
-    w_bins = np.array([QF._optical_bin_weight_pA(glauber, a, b) for (a,b) in cent_bins], float)
+    if is_AA:
+        w_bins = np.array([(b - a) / 100.0 for (a,b) in cent_bins], float)
+    else:
+        w_bins = np.array([QF._optical_bin_weight_pA(glauber, a, b) for (a,b) in cent_bins], float)
     w_bins /= max(w_bins.sum(), 1e-30)
     w_dict = {lab: w_bins[i] for i, lab in enumerate(labels)}
 
@@ -395,8 +402,6 @@ def rpa_binned_batch_driver(
     for c_idx, lab in enumerate(labels):
         L = Leff[c_idx]
         qpL = replace(qp_base, LA_fm=float(L), LB_fm=float(L))
-        
-        is_AA = (getattr(qp_base, "system", "pA") == "AA")
         
         # Calculate components
         # R_loss
@@ -625,7 +630,8 @@ class CNMCombineFast(CNMCombineBase):
         
         # 3. Combine
         final_bands = self._combine_bands_generic(components, npdf_bins_y, bands_y, labels, include_mb, mode="y")
-        return y_cent, labels, final_bands
+        tags = labels + (["MB"] if include_mb else [])
+        return y_cent, tags, final_bands
 
     def cnm_vs_pT(self, y_window, pt_edges=None, components=("npdf","eloss","broad","eloss_broad","cnm"), include_mb=True, **kwargs):
         if pt_edges is None: pt_edges = self.p_edges
@@ -645,7 +651,8 @@ class CNMCombineFast(CNMCombineBase):
         pT_cent, bands_pt, labels = self._calc_eloss_broad_band_vs_pT(pt_edges, (y0,y1), ["loss","broad","eloss_broad"])
         
         final_bands = self._combine_bands_generic(components, npdf_bins, bands_pt, labels, include_mb, mode="pT")
-        return pT_cent, labels, final_bands
+        tags = labels + (["MB"] if include_mb else [])
+        return pT_cent, tags, final_bands
 
     def cnm_vs_centrality(self, y_window, pt_range_avg=None, components=("npdf","eloss","broad","eloss_broad","cnm"), include_mb=True, **kwargs):
         # We need a fast centrality driver.

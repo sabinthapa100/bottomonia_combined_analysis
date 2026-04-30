@@ -1,0 +1,71 @@
+{
+  "title": "Bottomonium Survival Probabilities from qtraj-nlo for PbPb at 5 TeV",
+  "collaboration": "Theory",
+  "abstract": "Survival probabilities of bottomonium states (1S, 2S, 3S, 1P, 2P) computed using the qtraj-nlo quantum trajectory method for PbPb collisions at sqrt(s_NN) = 5 TeV. Results are provided for the Munich potential with and without quantum jumps, and for KSU potentials (isotropic and anisotropic). Kappa-hat values from 2 to 6 are scanned, with results for all impact parameters.",
+  "keywords": [
+    "bottomonium",
+    "quark-gluon plasma",
+    "quantum trajectories",
+    "Lindblad equation",
+    "heavy ion collisions",
+    "LHC"
+  ],
+  "physics_parameters": {
+    "collision_system": "PbPb",
+    "sqrt_s_NN_TeV": 5.0,
+    "reduced_mass_GeV": 2.365,
+    "alpha_coulomb": 0.6239853,
+    "kappa_range": [
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "impact_parameters_fm": [
+      0.0,
+      2.32,
+      4.25,
+      6.01,
+      7.78,
+      9.21,
+      10.45,
+      11.55,
+      11.6,
+      12.56,
+      12.6,
+      13.49,
+      13.5,
+      14.38,
+      14.4,
+      15.66,
+      15.7
+    ],
+    "states": [
+      "1S",
+      "2S",
+      "3S",
+      "1P",
+      "2P"
+    ],
+    "potentials": [
+      "Munich",
+      "KSU_isotropic",
+      "KSU_anisotropic"
+    ],
+    "stepper": "Crank-Nicolson NLO E/T",
+    "grid_points": 2048,
+    "box_length_inv_GeV": 40,
+    "time_step_inv_GeV": 0.001,
+    "max_steps": 80000
+  },
+  "pdg_reference_masses_GeV": {
+    "1S": 9.46,
+    "2S": 10.023,
+    "3S": 10.355,
+    "1P": 9.893,
+    "2P": 10.26
+  },
+  "code_version": "qtraj-nlo v2.1",
+  "code_reference": "Strickland et al., Comput. Phys. Commun. (2023)"
+}

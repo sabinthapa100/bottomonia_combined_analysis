@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path("/mnt/workstation/bottomonia_combined_analysis")
 sys.path.insert(0, str(ROOT / "hnm/qtraj-nlo/qtraj_out_analysis"))
 
-from qtraj_analysis.io import read_whitespace_table, parse_records
+from qtraj_analysis.io import load_qtraj_table, parse_records
 from qtraj_analysis.matching import build_observables
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -38,7 +38,7 @@ def run_analysis(datafile: Path, output_dir: Path, label: str):
     """Run QTraj analysis on a single datafile and output CSVs."""
     output_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"[{label}] Reading data from {datafile}...")
-    table = read_whitespace_table(str(datafile), logger)
+    table = load_qtraj_table(str(datafile), logger)
     records = parse_records(table, logger)
     obs_list = build_observables(records, logger)
     logger.info(f"[{label}] Successfully loaded {len(obs_list)} matched trajectories.")

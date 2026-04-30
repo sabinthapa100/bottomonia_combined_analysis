@@ -1,0 +1,13 @@
+executable = ./scripts/condorJob.sh
+arguments = $(ClusterId)_$(ProcId)
+input   = /dev/null
+should_transfer_files = YES
+transfer_input_files = qtraj,input
+when_to_transfer_output = ON_EXIT_OR_EVICT
+log = job_$(ClusterId)_$(ProcId).log
+output = job_$(ClusterId)_$(ProcId).out
+error = job_$(ClusterId)_$(ProcId).err
+request_cpus = 1
+request_memory = 100MB
+request_disk = 100MB
+queue 200
