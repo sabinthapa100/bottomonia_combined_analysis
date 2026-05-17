@@ -125,28 +125,15 @@ VARIANTS: Mapping[str, Tuple[str, str]] = {
     "pert": ("bottomonia_pert_{tag}_opt_production", "TAMU-P"),
 }
 GREEN = "#2ca02c"
-CNM_CENT_DIR = REPO_ROOT / "outputs" / "cnm" / "centralities"
-CNM_MINBIAS_DIR = REPO_ROOT / "outputs" / "cnm" / "minbias" / "005.36TeV" / "csv"
-CNM_SOURCE_BINS = {
-    "0-10%": (0.0, 10.0),
-    "10-30%": (10.0, 30.0),
-    "30-50%": (30.0, 50.0),
-    "50-70%": (50.0, 70.0),
-    "70-100%": (70.0, 100.0),
-}
-CNM_PT_FILES = {
-    "midrapidity": CNM_CENT_DIR / "Upsilon_RAA_vs_pT_y_n2p4_p2p4_OO_5p36TeV.csv",
-    "forward": CNM_CENT_DIR / "Upsilon_RAA_vs_pT_y_p2p5_p4p0_OO_5p36TeV.csv",
-}
-CNM_MB_PT_FILES = {
-    "midrapidity": CNM_MINBIAS_DIR / "Upsilon_minbias_MB_OO_005p36TeV_vs_pT_mid.csv",
-    "forward": CNM_MINBIAS_DIR / "Upsilon_minbias_MB_OO_005p36TeV_vs_pT_forward.csv",
-}
-CNM_MB_Y_FILE = CNM_MINBIAS_DIR / "Upsilon_minbias_MB_OO_005p36TeV_vs_y.csv"
-CNM_CENT_FILES = {
-    "midrapidity": CNM_CENT_DIR / "Upsilon_RAA_vs_cent_y_m2p4_to_2p4_OO_5p36TeV.csv",
-    "forward": CNM_CENT_DIR / "Upsilon_RAA_vs_cent_y_2p5_to_4_OO_5p36TeV.csv",
-}
+CNM_SCRIPT_ROOT = REPO_ROOT / "cnm" / "cnm_scripts"
+CNM_CODE_PATHS = (
+    REPO_ROOT / "cnm" / "eloss_code",
+    REPO_ROOT / "cnm" / "cnm_combine",
+    REPO_ROOT / "cnm" / "npdf_code",
+)
+M_UPSILON = 9.46
+M_UPSILON_AVG = 10.01
+RHIC_ABS_SIGMA_MB = 4.2
 
 
 @dataclass(frozen=True)
@@ -467,10 +454,20 @@ def _combine_band(run_tables: Mapping[str, pd.DataFrame],
         if central_policy == "center" and "center" in labels:
             center = merged[f"{name}__center"].to_numpy(dtype=np.float64)
         else:
-            center = np.nanmean(vals, axis=1)
+            finite = np.isfinite(vals)
+            count = np.sum(finite, axis=1)
+            total = np.sum(np.where(finite, vals, 0.0), axis=1)
+            center = np.full(vals.shape[0], np.nan, dtype=np.float64)
+            center[count > 0] = total[count > 0] / count[count > 0]
         merged[f"{name}_central"] = center
-        merged[f"{name}_lo"] = np.nanmin(vals, axis=1)
-        merged[f"{name}_hi"] = np.nanmax(vals, axis=1)
+        finite = np.isfinite(vals)
+        has_any = np.any(finite, axis=1)
+        lo = np.full(vals.shape[0], np.nan, dtype=np.float64)
+        hi = np.full(vals.shape[0], np.nan, dtype=np.float64)
+        lo[has_any] = np.min(np.where(finite[has_any], vals[has_any], np.inf), axis=1)
+        hi[has_any] = np.max(np.where(finite[has_any], vals[has_any], -np.inf), axis=1)
+        merged[f"{name}_lo"] = lo
+        merged[f"{name}_hi"] = hi
     keep = list(key_cols)
     for name in STATE_MAIN:
         keep += [f"{name}_central", f"{name}_lo", f"{name}_hi"]
@@ -523,240 +520,421 @@ def _nan_triplet_like(x: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray
     return nan.copy(), nan.copy(), nan.copy()
 
 
-def _read_csv_or_none(path: Path) -> pd.DataFrame | None:
-    return pd.read_csv(path) if path.exists() else None
+def _ensure_cnm_paths() -> None:
+    for path in (CNM_SCRIPT_ROOT, *CNM_CODE_PATHS):
+        p = str(path)
+        while p in sys.path:
+            sys.path.remove(p)
+    for path in reversed((CNM_SCRIPT_ROOT, *CNM_CODE_PATHS)):
+        sys.path.insert(0, str(path))
 
 
-def _parse_cent_tag(tag: str) -> Tuple[float, float] | None:
-    if tag == "MB":
-        return None
-    clean = str(tag).replace("%", "").strip()
-    try:
-        left, right = clean.split("-", 1)
-        return float(left), float(right)
-    except ValueError:
-        return None
+def _cent_tags(include_mb: bool = True) -> List[str]:
+    tags = [_cent_tag(a, b) for a, b in CENT_BINS]
+    if include_mb:
+        tags.append("MB")
+    return tags
 
 
-def _overlap_weights_for_tag(tag: str) -> Dict[str, float]:
-    """Map a requested centrality bin onto the publication CNM bins.
-
-    The bottomonia CNM publication package uses 0-10, 10-30, 30-50, 50-70,
-    70-100% bins.  The importance workflow uses charmonia-style 0-10, 10-20,
-    20-40, 40-60, 60-80, 80-100% bins.  Reusing publication CNM therefore
-    requires overlap-weighted bin averages, not interpolation in bin center.
-    """
-    target = _parse_cent_tag(tag)
-    if target is None:
-        return {}
-    t0, t1 = target
-    overlaps: Dict[str, float] = {}
-    for src_tag, (s0, s1) in CNM_SOURCE_BINS.items():
-        width = max(0.0, min(t1, s1) - max(t0, s0))
-        if width > 0.0:
-            overlaps[src_tag] = width
-    total = sum(overlaps.values())
-    if total <= 0.0:
-        return {}
-    return {k: v / total for k, v in overlaps.items()}
-
-
-def _weighted_arrays(parts: Sequence[Tuple[float, np.ndarray]], template: np.ndarray) -> np.ndarray:
-    if not parts:
-        return np.full_like(np.asarray(template, dtype=np.float64), np.nan, dtype=np.float64)
-    vals = np.stack([np.asarray(arr, dtype=np.float64) for _, arr in parts], axis=0)
-    weights = np.asarray([w for w, _ in parts], dtype=np.float64)[:, None]
-    finite = np.isfinite(vals)
-    denom = np.sum(np.where(finite, weights, 0.0), axis=0)
-    numer = np.sum(np.where(finite, vals * weights, 0.0), axis=0)
-    out = np.full(vals.shape[1], np.nan, dtype=np.float64)
-    ok = denom > 0.0
-    out[ok] = numer[ok] / denom[ok]
-    return out
-
-
-def _cnm_by_y(tag: str, y_values: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    def load_one(path_tag: str) -> pd.DataFrame:
-        safe = path_tag.replace("%", "pct")
-        path = CNM_CENT_DIR / f"Upsilon_RAA_vs_y_{safe}_OO_5p36TeV.csv"
-        if not path.exists():
-            raise FileNotFoundError(path)
-        return pd.read_csv(path)
-
-    y_values = np.asarray(y_values, dtype=np.float64)
-    if tag == "MB":
-        src = _read_csv_or_none(CNM_MB_Y_FILE)
-        if src is None:
-            src = _read_csv_or_none(CNM_CENT_DIR / "Upsilon_RAA_vs_y_MB_OO_5p36TeV.csv")
-        if src is None:
-            return _nan_triplet_like(y_values)
-        return (
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_central"].to_numpy(float)),
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_lo"].to_numpy(float)),
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_hi"].to_numpy(float)),
-        )
-
-    if tag in CNM_SOURCE_BINS:
-        src = load_one(tag)
-        return (
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_central"].to_numpy(float)),
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_lo"].to_numpy(float)),
-            _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_hi"].to_numpy(float)),
-        )
-
-    weights = _overlap_weights_for_tag(tag)
-    if not weights:
-        return _nan_triplet_like(y_values)
-    vals_c, vals_lo, vals_hi = [], [], []
-    for src_tag, w in weights.items():
-        src = load_one(src_tag)
-        vals_c.append((w, _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_central"].to_numpy(float))))
-        vals_lo.append((w, _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_lo"].to_numpy(float))))
-        vals_hi.append((w, _interp_series(y_values, src["y_center"].to_numpy(float), src["cnm_hi"].to_numpy(float))))
-    return (
-        _weighted_arrays(vals_c, y_values),
-        _weighted_arrays(vals_lo, y_values),
-        _weighted_arrays(vals_hi, y_values),
-    )
-
-
-def _cnm_by_pt(win_key: str, tag: str, pt_values: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    pt_values = np.asarray(pt_values, dtype=np.float64)
-    if tag == "MB":
-        mb_path = CNM_MB_PT_FILES.get(win_key)
-        src = _read_csv_or_none(mb_path) if mb_path is not None else None
-        if src is None:
-            path = CNM_PT_FILES.get(win_key)
-            src = _read_csv_or_none(path) if path is not None else None
-            if src is not None:
-                src = src[src["centrality"] == "MB"]
-        if src is None or src.empty:
-            return _nan_triplet_like(pt_values)
-        return (
-            _interp_series(pt_values, src["pT_center"].to_numpy(float), src["cnm_central"].to_numpy(float)),
-            _interp_series(pt_values, src["pT_center"].to_numpy(float), src["cnm_lo"].to_numpy(float)),
-            _interp_series(pt_values, src["pT_center"].to_numpy(float), src["cnm_hi"].to_numpy(float)),
-        )
-
-    path = CNM_PT_FILES.get(win_key)
-    if path is None or not path.exists():
-        return _nan_triplet_like(pt_values)
-    src = pd.read_csv(path)
-    if tag in set(src["centrality"]):
-        sub = src[src["centrality"] == tag]
-        return (
-            _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_central"].to_numpy(float)),
-            _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_lo"].to_numpy(float)),
-            _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_hi"].to_numpy(float)),
-        )
-
-    weights = _overlap_weights_for_tag(tag)
-    if not weights:
-        return _nan_triplet_like(pt_values)
-    vals_c, vals_lo, vals_hi = [], [], []
-    for src_tag, w in weights.items():
-        sub = src[src["centrality"] == src_tag]
-        if sub.empty:
-            continue
-        vals_c.append((w, _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_central"].to_numpy(float))))
-        vals_lo.append((w, _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_lo"].to_numpy(float))))
-        vals_hi.append((w, _interp_series(pt_values, sub["pT_center"].to_numpy(float), sub["cnm_hi"].to_numpy(float))))
-    return (
-        _weighted_arrays(vals_c, pt_values),
-        _weighted_arrays(vals_lo, pt_values),
-        _weighted_arrays(vals_hi, pt_values),
-    )
-
-
-def _cnm_by_centrality(win_key: str, cent_values: np.ndarray, tag_values: Sequence[str]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    path = CNM_CENT_FILES.get(win_key)
-    if path is None or not path.exists():
-        return _nan_triplet_like(cent_values)
-    src = pd.read_csv(path)
-    non_mb = src[src["label"] != "MB"].copy() if "label" in src.columns else src.copy()
-    out_c = np.full(len(cent_values), np.nan, dtype=np.float64)
-    out_lo = np.full(len(cent_values), np.nan, dtype=np.float64)
-    out_hi = np.full(len(cent_values), np.nan, dtype=np.float64)
-    mb = src[src["label"] == "MB"] if "label" in src.columns else src.iloc[0:0]
-    for i, tag in enumerate(tag_values):
-        if tag == "MB" and not mb.empty:
-            row = mb.iloc[-1]
-            out_c[i] = float(row["cnm_central"])
-            out_lo[i] = float(row["cnm_lo"])
-            out_hi[i] = float(row["cnm_hi"])
-            continue
-        weights = _overlap_weights_for_tag(tag)
-        if not weights:
-            continue
-        c_parts, lo_parts, hi_parts = [], [], []
-        for src_tag, w in weights.items():
-            row = non_mb[non_mb["label"] == src_tag]
-            if row.empty:
+def _table_from_cnm_bands(xcol: str, centers: np.ndarray, tags: Sequence[str],
+                          bands: Mapping[str, Tuple[Mapping[str, np.ndarray],
+                                                    Mapping[str, np.ndarray],
+                                                    Mapping[str, np.ndarray]]]) -> pd.DataFrame:
+    Rc, Rlo, Rhi = bands["cnm"]
+    rows: List[Dict[str, object]] = []
+    for i, xval in enumerate(np.asarray(centers, dtype=np.float64)):
+        for tag in tags:
+            if tag not in Rc:
                 continue
-            r = row.iloc[-1]
-            c_parts.append((w, float(r["cnm_central"])))
-            lo_parts.append((w, float(r["cnm_lo"])))
-            hi_parts.append((w, float(r["cnm_hi"])))
-        if c_parts:
-            out_c[i] = sum(w * v for w, v in c_parts) / sum(w for w, _ in c_parts)
-            out_lo[i] = sum(w * v for w, v in lo_parts) / sum(w for w, _ in lo_parts)
-            out_hi[i] = sum(w * v for w, v in hi_parts) / sum(w for w, _ in hi_parts)
-    return out_c, out_lo, out_hi
+            rows.append({
+                xcol: float(xval),
+                "centrality": tag,
+                "cnm_central": float(np.asarray(Rc[tag], dtype=np.float64)[i]),
+                "cnm_lo": float(np.asarray(Rlo[tag], dtype=np.float64)[i]),
+                "cnm_hi": float(np.asarray(Rhi[tag], dtype=np.float64)[i]),
+            })
+    return pd.DataFrame(rows)
 
 
-def attach_lhc_cnm(df: pd.DataFrame, *, cfg: SystemConfig, kind: str,
-                   win_key: str | None = None) -> pd.DataFrame:
-    """Add publication bottomonia CNM and CNM x primordial columns.
+def _table_from_cnm_centrality(win_key: str, cfg: SystemConfig, bands: Mapping[str, Tuple]) -> pd.DataFrame:
+    Rc, Rlo, Rhi, mb_c, mb_lo, mb_hi = bands["cnm"]
+    rows: List[Dict[str, object]] = []
+    y_window = dict((k, w) for k, w, _ in cfg.y_windows)[win_key]
+    for i, (c0, c1) in enumerate(CENT_BINS):
+        rows.append({
+            "cent_left": c0,
+            "cent_right": c1,
+            "cent_center": 0.5 * (c0 + c1),
+            "centrality": _cent_tag(c0, c1),
+            "cnm_central": float(np.asarray(Rc, dtype=np.float64)[i]),
+            "cnm_lo": float(np.asarray(Rlo, dtype=np.float64)[i]),
+            "cnm_hi": float(np.asarray(Rhi, dtype=np.float64)[i]),
+            "y_min": y_window[0],
+            "y_max": y_window[1],
+        })
+    rows.append({
+        "cent_left": cfg.mb_window[0],
+        "cent_right": cfg.mb_window[1],
+        "cent_center": 0.5 * (cfg.mb_window[0] + cfg.mb_window[1]),
+        "centrality": "MB",
+        "cnm_central": float(mb_c),
+        "cnm_lo": float(mb_lo),
+        "cnm_hi": float(mb_hi),
+        "y_min": y_window[0],
+        "y_max": y_window[1],
+    })
+    return pd.DataFrame(rows)
 
-    Source of CNM truth:
-      * outputs/cnm/centralities/ from cnm/cnm_scripts/run_bottomonia_cnm_OO_publication.py
-        for finite centrality bins and centrality dependence.
-      * outputs/cnm/minbias/005.36TeV/csv/ from scripts/cnm/run_upsilon_oo5360_minbias_cnm_summary.py
-        for MB y and pT projections.
 
-    Requested charmonia-style bins are not identical to the publication CNM
-    bins, so finite centrality CNM is overlap-weighted in centrality percentile
-    space. MB is never treated as a finite bin.
-    """
-    out = df.copy()
-    if cfg.key != "lhc_oo5360":
-        return out
-    cnm_c = np.full(len(out), np.nan, dtype=np.float64)
-    cnm_lo = np.full(len(out), np.nan, dtype=np.float64)
-    cnm_hi = np.full(len(out), np.nan, dtype=np.float64)
-    if kind == "y":
-        for tag, idx in out.groupby("centrality").groups.items():
-            yc = out.loc[idx, "y_center"].to_numpy(float)
-            c, lo, hi = _cnm_by_y(str(tag), yc)
-            cnm_c[list(idx)] = c
-            cnm_lo[list(idx)] = lo
-            cnm_hi[list(idx)] = hi
-    elif kind == "pt" and win_key is not None:
-        for tag, idx in out.groupby("centrality").groups.items():
-            pt = out.loc[idx, "pT_center"].to_numpy(float)
-            c, lo, hi = _cnm_by_pt(win_key, str(tag), pt)
-            cnm_c[list(idx)] = c
-            cnm_lo[list(idx)] = lo
-            cnm_hi[list(idx)] = hi
-    elif kind == "centrality" and win_key is not None:
-        c, lo, hi = _cnm_by_centrality(
-            win_key,
-            out["cent_center"].to_numpy(float),
-            out["centrality"].astype(str).tolist(),
-        )
-        cnm_c, cnm_lo, cnm_hi = c, lo, hi
-    else:
-        return out
+def _recompute_mb_rows(table: pd.DataFrame, cfg: SystemConfig, xcol: str | None) -> pd.DataFrame:
+    weights = _centrality_weights(cfg)
+    finite = table[table["centrality"] != "MB"].copy()
+    mb_rows: List[Dict[str, object]] = []
+    group_cols = [xcol] if xcol is not None else ["__all"]
+    if xcol is None:
+        finite["__all"] = 0
+    for _, grp in finite.groupby(group_cols, dropna=False):
+        row: Dict[str, object] = {
+            "centrality": "MB",
+            "cnm_source": "",
+        }
+        if xcol is not None:
+            row[xcol] = float(grp[xcol].iloc[0])
+        for col in ("cnm_central", "cnm_lo", "cnm_hi"):
+            num = 0.0
+            den = 0.0
+            for r in grp.itertuples(index=False):
+                tag = str(getattr(r, "centrality"))
+                val = float(getattr(r, col))
+                w = float(weights.get(tag, 0.0))
+                if w > 0.0 and np.isfinite(val):
+                    num += w * val
+                    den += w
+            row[col] = float(num / den) if den > 0.0 else float("nan")
+        for col in ("y_min", "y_max", "cent_left", "cent_right", "cent_center"):
+            if col in grp.columns and col not in row:
+                vals = grp[col].dropna().unique()
+                if vals.size == 1:
+                    row[col] = float(vals[0])
+        if xcol is None:
+            row["cent_left"] = cfg.mb_window[0]
+            row["cent_right"] = cfg.mb_window[1]
+            row["cent_center"] = 0.5 * (cfg.mb_window[0] + cfg.mb_window[1])
+        mb_rows.append(row)
+    out = table[table["centrality"] != "MB"].copy()
+    if "__all" in out.columns:
+        out = out.drop(columns=["__all"])
+    if mb_rows:
+        out = pd.concat([out, pd.DataFrame(mb_rows)], ignore_index=True)
+    if "__all" in out.columns:
+        out = out.drop(columns=["__all"])
+    return _sort_output_table(out)
 
-    out["cnm_central"] = cnm_c
-    out["cnm_lo"] = cnm_lo
-    out["cnm_hi"] = cnm_hi
-    out["cnm_source"] = "bottomonia_publication_cnm_overlap_weighted"
-    for name in STATE_MAIN:
-        out[f"{name}_cnm_central"] = out[f"{name}_central"].to_numpy(float) * cnm_c
-        out[f"{name}_cnm_lo"] = out[f"{name}_lo"].to_numpy(float) * cnm_lo
-        out[f"{name}_cnm_hi"] = out[f"{name}_hi"].to_numpy(float) * cnm_hi
+
+def _combine_relative_quadrature(prim_c: np.ndarray, prim_lo: np.ndarray, prim_hi: np.ndarray,
+                                 cnm_c: np.ndarray, cnm_lo: np.ndarray, cnm_hi: np.ndarray
+                                 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    prim_c = np.asarray(prim_c, dtype=np.float64)
+    prim_lo = np.asarray(prim_lo, dtype=np.float64)
+    prim_hi = np.asarray(prim_hi, dtype=np.float64)
+    cnm_c = np.asarray(cnm_c, dtype=np.float64)
+    cnm_lo = np.asarray(cnm_lo, dtype=np.float64)
+    cnm_hi = np.asarray(cnm_hi, dtype=np.float64)
+    central = prim_c * cnm_c
+    with np.errstate(divide="ignore", invalid="ignore"):
+        p_lo = np.where(np.abs(prim_c) > 1e-12, np.maximum(prim_c - prim_lo, 0.0) / np.abs(prim_c), 0.0)
+        p_hi = np.where(np.abs(prim_c) > 1e-12, np.maximum(prim_hi - prim_c, 0.0) / np.abs(prim_c), 0.0)
+        c_lo = np.where(np.abs(cnm_c) > 1e-12, np.maximum(cnm_c - cnm_lo, 0.0) / np.abs(cnm_c), 0.0)
+        c_hi = np.where(np.abs(cnm_c) > 1e-12, np.maximum(cnm_hi - cnm_c, 0.0) / np.abs(cnm_c), 0.0)
+    rel_lo = np.sqrt(p_lo * p_lo + c_lo * c_lo)
+    rel_hi = np.sqrt(p_hi * p_hi + c_hi * c_hi)
+    lo = central * (1.0 - rel_lo)
+    hi = central * (1.0 + rel_hi)
+    lo = np.where(np.isfinite(lo), np.maximum(lo, 0.0), np.nan)
+    hi = np.where(np.isfinite(hi), hi, np.nan)
+    central = np.where(np.isfinite(central), central, np.nan)
+    return central, lo, hi
+
+
+@dataclass(frozen=True)
+class CNMTables:
+    y: pd.DataFrame
+    pt: Mapping[str, pd.DataFrame]
+    centrality: Mapping[str, pd.DataFrame]
+    source: str
+
+
+_CNM_TABLE_CACHE: Dict[Tuple[str, Tuple[float, ...], Tuple[float, ...]], CNMTables] = {}
+
+
+def _pin_cnm_edge_bins(bands_y, yc: np.ndarray) -> None:
+    if yc.size < 3:
+        return
+    for comp in bands_y:
+        for i in range(3):
+            d = bands_y[comp][i]
+            for tag in d:
+                vals = np.asarray(d[tag], dtype=np.float64).copy()
+                vals[0] = vals[1]
+                vals[-1] = vals[-2]
+                d[tag] = vals
+
+
+def _patch_module_attrs(module, updates: Mapping[str, object]):
+    old = {name: getattr(module, name) for name in updates if hasattr(module, name)}
+    for name, value in updates.items():
+        setattr(module, name, value)
+    return old
+
+
+def _restore_module_attrs(module, old: Mapping[str, object]) -> None:
+    for name, value in old.items():
+        setattr(module, name, value)
+
+
+def _build_lhc_cnm_context(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.ndarray):
+    _ensure_cnm_paths()
+    import run_bottomonia_cnm_OO as cnm_oo  # noqa: E402
+
+    y_windows = [(float(y0), float(y1), rf"${tex}$") for _, (y0, y1), tex in cfg.y_windows]
+    updates = {
+        "CENT_BINS": [(float(a), float(b)) for a, b in CENT_BINS],
+        "Y_EDGES": np.asarray(y_edges, dtype=np.float64),
+        "P_EDGES": np.asarray(pt_edges, dtype=np.float64),
+        "PT_RANGE_AVG": (0.0, float(cfg.pt_max)),
+        "Y_WINDOWS": y_windows,
+    }
+    old = _patch_module_attrs(cnm_oo, updates)
+    try:
+        cnm = cnm_oo.build_eloss_context("5.36")
+        cnm.cent_bins = [(float(a), float(b)) for a, b in CENT_BINS]
+        cnm.y_edges = np.asarray(y_edges, dtype=np.float64)
+        cnm.p_edges = np.asarray(pt_edges, dtype=np.float64)
+        cnm.pt_range_avg = (0.0, float(cfg.pt_max))
+        cnm.y_windows = y_windows
+        return cnm, "live:cnm/cnm_scripts/run_bottomonia_cnm_OO.py"
+    finally:
+        _restore_module_attrs(cnm_oo, old)
+
+
+def _build_oo_npdf_grid_from_epps(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.ndarray) -> pd.DataFrame:
+    _ensure_cnm_paths()
+    from gluon_ratio import EPPS21Ratio, GluonEPPSProvider  # noqa: E402
+
+    y_centers = 0.5 * (np.asarray(y_edges[:-1], dtype=np.float64) + np.asarray(y_edges[1:], dtype=np.float64))
+    pt_centers = 0.5 * (np.asarray(pt_edges[:-1], dtype=np.float64) + np.asarray(pt_edges[1:], dtype=np.float64))
+    yy, pp = np.meshgrid(y_centers, pt_centers, indexing="ij")
+    y_flat = yy.reshape(-1)
+    pt_flat = pp.reshape(-1)
+
+    epps = EPPS21Ratio(A=16, path=str(REPO_ROOT / "inputs" / "npdf" / "nPDFs"))
+    g_forward = GluonEPPSProvider(epps, cfg.sqrts_gev, m_state_GeV=M_UPSILON_AVG, y_sign_for_xA=1)
+    g_backward = GluonEPPSProvider(epps, cfg.sqrts_gev, m_state_GeV=M_UPSILON_AVG, y_sign_for_xA=-1)
+
+    members: List[np.ndarray] = []
+    for sid in range(1, 50):
+        r1 = np.asarray(g_forward.SA_ypt_set(y_flat, pt_flat, set_id=sid), dtype=np.float64)
+        r2 = np.asarray(g_backward.SA_ypt_set(y_flat, pt_flat, set_id=sid), dtype=np.float64)
+        members.append(r1 * r2)
+    r0 = members[0]
+    M = np.stack(members[1:], axis=0)
+    D = M[0::2, :] - M[1::2, :]
+    h = 0.5 * np.sqrt(np.sum(D * D, axis=0))
+    out = pd.DataFrame({
+        "y": y_flat,
+        "pt": pt_flat,
+        "r_central": r0,
+        "r_lo": r0 - h,
+        "r_hi": r0 + h,
+    })
+    for j, arr in enumerate(M, start=1):
+        out[f"r_mem_{j:03d}"] = arr
     return out
+
+
+def _build_rhic_cnm_context(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.ndarray):
+    _ensure_cnm_paths()
+    from glauber import OpticalGlauber, SystemSpec  # noqa: E402
+    from gluon_ratio import EPPS21Ratio, GluonEPPSProvider  # noqa: E402
+    from npdf_centrality import compute_df49_by_centrality  # noqa: E402
+    from particle import Particle  # noqa: E402
+    from coupling import alpha_s_provider  # noqa: E402
+    import quenching_fast as QF  # noqa: E402
+    from cnm_combine_fast_nuclabs import CNMCombineFast  # noqa: E402
+
+    grid = _build_oo_npdf_grid_from_epps(cfg, y_edges, pt_edges)
+    gl = OpticalGlauber(
+        SystemSpec("AA", cfg.sqrts_gev, A=16, sigma_nn_mb=42.0),
+        nx_pa=64, ny_pa=64, verbose=False,
+    )
+    r0 = grid["r_central"].to_numpy(dtype=np.float64)
+    M = grid[[f"r_mem_{i:03d}" for i in range(1, 49)]].to_numpy(dtype=np.float64).T
+    SA_all = np.vstack([r0[None, :], M])
+
+    epps = EPPS21Ratio(A=16, path=str(REPO_ROOT / "inputs" / "npdf" / "nPDFs"))
+    gluon = GluonEPPSProvider(epps, cfg.sqrts_gev, m_state_GeV=M_UPSILON_AVG)
+    df49_by_cent, _K_by_cent, _SA_all, _y_shift = compute_df49_by_centrality(
+        grid, r0, M, gluon, gl,
+        cent_bins=[(float(a), float(b)) for a, b in CENT_BINS],
+        nb_bsamples=5, y_shift_fraction=0.0, kind="AA", SA_all=SA_all,
+    )
+    particle = Particle(family="bottomonia", state="avg", mass_override_GeV=M_UPSILON)
+    alpha_s = alpha_s_provider(mode="running", LambdaQCD=0.25)
+    Lmb = gl.leff_minbias_AA()
+    qp_base = QF.QuenchParams(
+        qhat0=0.075, lp_fm=1.5,
+        LA_fm=Lmb, LB_fm=Lmb,
+        system="AA", lambdaQCD=0.25, roots_GeV=cfg.sqrts_gev,
+        alpha_of_mu=alpha_s, alpha_scale="mT",
+        use_hard_cronin=True, mapping="exp", device="cpu",
+    )
+    cnm = CNMCombineFast(
+        energy="0.200", family="bottomonia", particle_state="avg",
+        sqrt_sNN=cfg.sqrts_gev, sigma_nn_mb=42.0,
+        cent_bins=[(float(a), float(b)) for a, b in CENT_BINS],
+        y_edges=np.asarray(y_edges, dtype=np.float64),
+        p_edges=np.asarray(pt_edges, dtype=np.float64),
+        y_windows=[(float(y0), float(y1), tex) for _, (y0, y1), tex in cfg.y_windows],
+        pt_range_avg=(0.0, float(cfg.pt_max)), pt_floor_w=1.0,
+        weight_mode="flat", y_ref=0.0, cent_c0=MB_C0,
+        q0_pair=(0.05, 0.09), p0_scale_pair=(0.9, 1.1), nb_bsamples=5,
+        y_shift_fraction=0.0, particle=particle,
+        npdf_ctx=dict(df49_by_cent=df49_by_cent, df_pp=grid, df_pa=grid, gluon=gluon),
+        gl=gl, qp_base=qp_base, spec=gl.spec,
+    )
+    return cnm, f"live:OO200 EPPS21 A=16 + eloss/broad + absorption sigma_abs={RHIC_ABS_SIGMA_MB:g} mb"
+
+
+def _absorption_factor_for_cent(glauber, c0: float, c1: float, *, sigma_abs_mb: float) -> float:
+    sigma_abs_fm2 = 0.1 * float(sigma_abs_mb)
+    ps = np.linspace(float(c0) / 100.0, float(c1) / 100.0, 5)
+    vals = []
+    for p in ps:
+        b = float(glauber.b_from_percentile(float(p), kind="AA"))
+        if hasattr(glauber, "TA_r"):
+            thickness = 2.0 * float(glauber.TA_r(b))
+        else:
+            thickness = 0.0
+        vals.append(math.exp(-sigma_abs_fm2 * max(thickness, 0.0)))
+    return float(np.mean(vals))
+
+
+def _apply_rhic_absorption_to_table(table: pd.DataFrame, cfg: SystemConfig, glauber) -> pd.DataFrame:
+    out = table.copy()
+    if cfg.key != "rhic_oo200":
+        return out
+    factors = {
+        _cent_tag(a, b): _absorption_factor_for_cent(glauber, a, b, sigma_abs_mb=RHIC_ABS_SIGMA_MB)
+        for a, b in CENT_BINS
+    }
+    weights = _centrality_weights(cfg)
+    mb_num = sum(weights.get(tag, 0.0) * val for tag, val in factors.items())
+    mb_den = sum(weights.get(tag, 0.0) for tag in factors)
+    factors["MB"] = mb_num / mb_den if mb_den > 0.0 else float("nan")
+    fac = out["centrality"].astype(str).map(factors).to_numpy(dtype=np.float64)
+    for col in ("cnm_central", "cnm_lo", "cnm_hi"):
+        out[col] = out[col].to_numpy(dtype=np.float64) * fac
+    return out
+
+
+def _compute_cnm_tables(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.ndarray,
+                        logger: logging.Logger) -> CNMTables:
+    key = (
+        cfg.key,
+        tuple(np.asarray(y_edges, dtype=np.float64).round(8)),
+        tuple(np.asarray(pt_edges, dtype=np.float64).round(8)),
+    )
+    cached = _CNM_TABLE_CACHE.get(key)
+    if cached is not None:
+        return cached
+
+    if cfg.key == "lhc_oo5360":
+        logger.info("[%s] computing CNM live via bottomonia OO CNM script", cfg.key)
+        cnm, source = _build_lhc_cnm_context(cfg, y_edges, pt_edges)
+    elif cfg.key == "rhic_oo200":
+        logger.info("[%s] computing CNM live from OO200 CNM modules", cfg.key)
+        cnm, source = _build_rhic_cnm_context(cfg, y_edges, pt_edges)
+    else:
+        raise ValueError(f"CNM runtime is not configured for {cfg.key}")
+
+    yc, tags_y, bands_y = cnm.cnm_vs_y(
+        y_edges=np.asarray(y_edges, dtype=np.float64),
+        pt_range_avg=(0.0, float(cfg.pt_max)),
+        components=("cnm",),
+        include_mb=True,
+    )
+    _pin_cnm_edge_bins(bands_y, np.asarray(yc, dtype=np.float64))
+    y_table = _table_from_cnm_bands("y_center", np.asarray(yc, dtype=np.float64), tags_y, bands_y)
+    y_table = _recompute_mb_rows(y_table, cfg, "y_center")
+
+    pt_tables: Dict[str, pd.DataFrame] = {}
+    cent_tables: Dict[str, pd.DataFrame] = {}
+    for win_key, y_window, _ in cfg.y_windows:
+        pc, tags_pt, bands_pt = cnm.cnm_vs_pT(
+            y_window,
+            np.asarray(pt_edges, dtype=np.float64),
+            components=("cnm",),
+            include_mb=True,
+        )
+        pt_table = _table_from_cnm_bands("pT_center", np.asarray(pc, dtype=np.float64), tags_pt, bands_pt)
+        pt_table = _recompute_mb_rows(pt_table, cfg, "pT_center")
+        pt_table["y_min"] = float(y_window[0])
+        pt_table["y_max"] = float(y_window[1])
+        pt_tables[win_key] = pt_table
+
+        bands_cent = cnm.cnm_vs_centrality(
+            y_window,
+            pt_range_avg=(0.0, float(cfg.pt_max)),
+            components=("cnm",),
+            include_mb=True,
+        )
+        cent_table = _table_from_cnm_centrality(win_key, cfg, bands_cent)
+        cent_table = _recompute_mb_rows(cent_table, cfg, None)
+        if "y_min" not in cent_table.columns:
+            cent_table["y_min"] = float(y_window[0])
+            cent_table["y_max"] = float(y_window[1])
+        cent_tables[win_key] = cent_table
+
+    if cfg.key == "rhic_oo200":
+        y_table = _apply_rhic_absorption_to_table(y_table, cfg, cnm.gl)
+        y_table = _recompute_mb_rows(y_table, cfg, "y_center")
+        pt_tables = {
+            k: _recompute_mb_rows(_apply_rhic_absorption_to_table(v, cfg, cnm.gl), cfg, "pT_center")
+            for k, v in pt_tables.items()
+        }
+        cent_tables = {
+            k: _recompute_mb_rows(_apply_rhic_absorption_to_table(v, cfg, cnm.gl), cfg, None)
+            for k, v in cent_tables.items()
+        }
+
+    for table in [y_table, *pt_tables.values(), *cent_tables.values()]:
+        table["cnm_source"] = source
+
+    out = CNMTables(y=y_table, pt=pt_tables, centrality=cent_tables, source=source)
+    _CNM_TABLE_CACHE[key] = out
+    return out
+
+
+def _merge_cnm_columns(df: pd.DataFrame, cnm: pd.DataFrame, *,
+                       key_cols: Sequence[str]) -> pd.DataFrame:
+    out = df.merge(
+        cnm[list(key_cols) + ["cnm_central", "cnm_lo", "cnm_hi", "cnm_source"]],
+        on=list(key_cols),
+        how="left",
+    )
+    for name in STATE_MAIN:
+        c, lo, hi = _combine_relative_quadrature(
+            out[f"{name}_central"].to_numpy(dtype=np.float64),
+            out[f"{name}_lo"].to_numpy(dtype=np.float64),
+            out[f"{name}_hi"].to_numpy(dtype=np.float64),
+            out["cnm_central"].to_numpy(dtype=np.float64),
+            out["cnm_lo"].to_numpy(dtype=np.float64),
+            out["cnm_hi"].to_numpy(dtype=np.float64),
+        )
+        out[f"{name}_cnm_central"] = c
+        out[f"{name}_cnm_lo"] = lo
+        out[f"{name}_cnm_hi"] = hi
+    return _sort_output_table(out)
 
 
 def _configure_matplotlib():
@@ -1326,13 +1504,21 @@ def analyze_dataset(cfg: SystemConfig,
             writer.writerow(row)
 
     out: Dict[str, pd.DataFrame] = {}
+    cnm_tables: CNMTables | None = None
+    if include_cnm:
+        cnm_tables = _compute_cnm_tables(cfg, y_edges, pt_edges, logger)
+
     band_y = _combine_band(
         run_tables_y,
         key_cols=("y_center", "centrality", "mb", "cent_left", "cent_right"),
         central_policy=spec.central_policy,
     )
-    if include_cnm:
-        band_y = attach_lhc_cnm(band_y, cfg=cfg, kind="y")
+    if cnm_tables is not None:
+        band_y = _merge_cnm_columns(
+            band_y,
+            cnm_tables.y,
+            key_cols=("y_center", "centrality"),
+        )
     _write_csv(csv_dir / "raa_vs_y_all_centralities.csv", band_y)
     out["y"] = band_y
 
@@ -1342,8 +1528,12 @@ def analyze_dataset(cfg: SystemConfig,
             key_cols=("pT_center", "centrality", "mb", "cent_left", "cent_right", "y_min", "y_max"),
             central_policy=spec.central_policy,
         )
-        if include_cnm:
-            band_pt = attach_lhc_cnm(band_pt, cfg=cfg, kind="pt", win_key=win_key)
+        if cnm_tables is not None:
+            band_pt = _merge_cnm_columns(
+                band_pt,
+                cnm_tables.pt[win_key],
+                key_cols=("pT_center", "centrality"),
+            )
         _write_csv(csv_dir / f"raa_vs_pt_{win_key}_all_centralities.csv", band_pt)
         out[f"pt_{win_key}"] = band_pt
 
@@ -1352,8 +1542,12 @@ def analyze_dataset(cfg: SystemConfig,
             key_cols=("cent_left", "cent_right", "cent_center", "centrality", "mb", "y_min", "y_max"),
             central_policy=spec.central_policy,
         )
-        if include_cnm:
-            band_cent = attach_lhc_cnm(band_cent, cfg=cfg, kind="centrality", win_key=win_key)
+        if cnm_tables is not None:
+            band_cent = _merge_cnm_columns(
+                band_cent,
+                cnm_tables.centrality[win_key],
+                key_cols=("centrality",),
+            )
         _write_csv(csv_dir / f"raa_vs_centrality_{win_key}.csv", band_cent)
         out[f"centrality_{win_key}"] = band_cent
 
