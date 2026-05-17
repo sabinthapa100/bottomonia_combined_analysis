@@ -37,8 +37,9 @@ figures for:
   plus an MB panel
 - `R_AA` vs centrality in midrapidity and forward rapidity
 
-Bottomonia `pT` bins cover `0-20 GeV` for LHC O+O 5.36 TeV and
-`0-15 GeV` for RHIC O+O 200 GeV.
+Bottomonia `pT` bins follow the existing bottomonia CNM convention, with
+integer-GeV bin centers: `1-20 GeV` for LHC O+O 5.36 TeV and `1-15 GeV` for
+RHIC O+O 200 GeV. RHIC rapidity plots are restricted to `-2 < y < 2`.
 
 Figures use the same centrality-grid convention as the charmonia primordial
 workflow: step curves (`where="post"`) with dashed state lines and hatched
@@ -54,6 +55,8 @@ absorption factor, so its total is `nPDF x ELoss x pT broadening x absorption`.
 CNM is evaluated in the same centrality bins as primordial:
 `0-10`, `10-20`, `20-40`, `40-60`, `60-80`, `80-100`; MB is recomputed with the
 workflow MB windows (`0-100%` LHC, `0-80%` RHIC).
+For RHIC forward pT panels, the CNM curve is held fixed above `pT=8.5 GeV`,
+matching the charmonia CNM guard against the high-`x` nPDF edge instability.
 
 The combined band is formed as a central-value product with relative
 uncertainties added in quadrature.

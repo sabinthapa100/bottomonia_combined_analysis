@@ -68,8 +68,8 @@ CENT_BINS: Tuple[Tuple[float, float], ...] = (
     (0.0, 10.0), (10.0, 20.0), (20.0, 40.0),
     (40.0, 60.0), (60.0, 80.0), (80.0, 100.0),
 )
-PT_EDGES_FULL = np.arange(0.0, 20.0 + 1.0, 1.0, dtype=np.float64)
-PT_EDGES_SMOKE = np.array([0.0, 5.0, 10.0, 20.0], dtype=np.float64)
+PT_EDGES_FULL = np.arange(0.5, 20.0 + 0.5 + 1e-9, 1.0, dtype=np.float64)
+PT_EDGES_SMOKE = np.array([0.5, 5.5, 10.5, 20.5], dtype=np.float64)
 MB_C0 = 0.25
 
 
@@ -109,8 +109,8 @@ SYSTEMS: Mapping[str, SystemConfig] = {
         sqrts_gev=200.0,
         input_tag="OO200",
         b_grid=(0.0, 1.3225, 2.4181, 3.4198, 4.4307, 5.2924, 6.4887),
-        y_edges=np.arange(-2.5, 2.5 + 0.5, 0.5, dtype=np.float64),
-        y_edges_smoke=np.array([-2.5, -1.0, 0.0, 1.0, 2.5], dtype=np.float64),
+        y_edges=np.arange(-2.0, 2.0 + 0.5, 0.5, dtype=np.float64),
+        y_edges_smoke=np.array([-2.0, -1.0, 0.0, 1.0, 2.0], dtype=np.float64),
         y_windows=(
             ("midrapidity", (-1.0, 1.0), "|y| < 1"),
             ("forward", (1.0, 2.0), "1 < y < 2"),
@@ -499,8 +499,8 @@ def _write_csv(path: Path, df: pd.DataFrame) -> None:
 
 def _pt_edges_for_cfg(cfg: SystemConfig, *, smoke: bool) -> np.ndarray:
     if smoke:
-        return np.array([0.0, 5.0, 10.0, float(cfg.pt_max)], dtype=np.float64)
-    return np.arange(0.0, float(cfg.pt_max) + 1.0, 1.0, dtype=np.float64)
+        return np.array([0.5, 5.5, 10.5, float(cfg.pt_max) + 0.5], dtype=np.float64)
+    return np.arange(0.5, float(cfg.pt_max) + 0.5 + 1e-9, 1.0, dtype=np.float64)
 
 
 def _interp_series(x: np.ndarray, xp: np.ndarray, fp: np.ndarray) -> np.ndarray:
@@ -628,6 +628,51 @@ def _recompute_mb_rows(table: pd.DataFrame, cfg: SystemConfig, xcol: str | None)
         out = pd.concat([out, pd.DataFrame(mb_rows)], ignore_index=True)
     if "__all" in out.columns:
         out = out.drop(columns=["__all"])
+    return _sort_output_table(out)
+
+
+def _pin_cnm_edge_nans(table: pd.DataFrame, xcol: str) -> pd.DataFrame:
+    """Fill unsupported edge CNM bins from the nearest finite CNM bin.
+
+    This is only an edge-support guard for plotting/composition on requested
+    axes. Interior NaNs remain NaNs because those would indicate a real hole.
+    """
+    out = table.copy()
+    cols = ["cnm_central", "cnm_lo", "cnm_hi"]
+    if xcol not in out.columns or not set(cols).issubset(out.columns):
+        return out
+    for _tag, idx in out.groupby("centrality").groups.items():
+        sub = out.loc[idx].sort_values(xcol)
+        order = sub.index.to_numpy()
+        finite = np.ones(len(order), dtype=bool)
+        for col in cols:
+            finite &= np.isfinite(out.loc[order, col].to_numpy(dtype=np.float64))
+        if not np.any(finite):
+            continue
+        first_finite = int(np.flatnonzero(finite)[0])
+        last_finite = int(np.flatnonzero(finite)[-1])
+        for pos in range(0, first_finite):
+            for col in cols:
+                out.loc[order[pos], col] = out.loc[order[first_finite], col]
+        for pos in range(last_finite + 1, len(order)):
+            for col in cols:
+                out.loc[order[pos], col] = out.loc[order[last_finite], col]
+    return _sort_output_table(out)
+
+
+def _hold_cnm_above_pt(table: pd.DataFrame, hold_above: float) -> pd.DataFrame:
+    out = table.copy()
+    cols = ["cnm_central", "cnm_lo", "cnm_hi"]
+    if "pT_center" not in out.columns or not set(cols).issubset(out.columns):
+        return out
+    for _tag, idx in out.groupby("centrality").groups.items():
+        sub = out.loc[idx].sort_values("pT_center")
+        ref = sub[sub["pT_center"] <= float(hold_above) + 1e-12].tail(1)
+        if ref.empty:
+            continue
+        high_idx = sub[sub["pT_center"] > float(hold_above) + 1e-12].index
+        for col in cols:
+            out.loc[high_idx, col] = float(ref.iloc[0][col])
     return _sort_output_table(out)
 
 
@@ -878,6 +923,7 @@ def _compute_cnm_tables(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.nda
         )
         pt_table = _table_from_cnm_bands("pT_center", np.asarray(pc, dtype=np.float64), tags_pt, bands_pt)
         pt_table = _recompute_mb_rows(pt_table, cfg, "pT_center")
+        pt_table = _pin_cnm_edge_nans(pt_table, "pT_center")
         pt_table["y_min"] = float(y_window[0])
         pt_table["y_max"] = float(y_window[1])
         pt_tables[win_key] = pt_table
@@ -898,10 +944,15 @@ def _compute_cnm_tables(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.nda
     if cfg.key == "rhic_oo200":
         y_table = _apply_rhic_absorption_to_table(y_table, cfg, cnm.gl)
         y_table = _recompute_mb_rows(y_table, cfg, "y_center")
-        pt_tables = {
-            k: _recompute_mb_rows(_apply_rhic_absorption_to_table(v, cfg, cnm.gl), cfg, "pT_center")
-            for k, v in pt_tables.items()
-        }
+        y_window_by_key = {wk: ww for wk, ww, _ in cfg.y_windows}
+        rhic_pt_tables: Dict[str, pd.DataFrame] = {}
+        for k, v in pt_tables.items():
+            vv = _recompute_mb_rows(_apply_rhic_absorption_to_table(v, cfg, cnm.gl), cfg, "pT_center")
+            y0, y1 = y_window_by_key[k]
+            if float(y0) * float(y1) > 0.0:
+                vv = _hold_cnm_above_pt(vv, 8.5)
+            rhic_pt_tables[k] = _pin_cnm_edge_nans(vv, "pT_center")
+        pt_tables = rhic_pt_tables
         cent_tables = {
             k: _recompute_mb_rows(_apply_rhic_absorption_to_table(v, cfg, cnm.gl), cfg, None)
             for k, v in cent_tables.items()
@@ -980,13 +1031,24 @@ def _edges_from_centers(centers: np.ndarray, *, x_min: float | None = None,
     return np.r_[left, mids, right].astype(np.float64)
 
 
+def _contiguous_true_segments(mask: np.ndarray) -> List[np.ndarray]:
+    idx = np.flatnonzero(np.asarray(mask, dtype=bool))
+    if idx.size == 0:
+        return []
+    breaks = np.where(np.diff(idx) > 1)[0] + 1
+    return [seg for seg in np.split(idx, breaks) if seg.size]
+
+
 def _step_dashed_hatched(ax, centers: np.ndarray, central: np.ndarray,
                          lo: np.ndarray, hi: np.ndarray, *,
                          color: str, label: str | None,
                          linestyle: object = "--",
                          x_min: float | None = None,
                          x_max: float | None = None,
-                         zorder: int = 3) -> None:
+                         zorder: int = 3,
+                         fill_alpha: float = 0.10,
+                         hatch: str | None = None,
+                         fill_color: str | None = None) -> None:
     centers = np.asarray(centers, dtype=np.float64)
     central = np.asarray(central, dtype=np.float64)
     lo = np.asarray(lo, dtype=np.float64)
@@ -994,20 +1056,25 @@ def _step_dashed_hatched(ax, centers: np.ndarray, central: np.ndarray,
     mask = np.isfinite(centers) & np.isfinite(central) & np.isfinite(lo) & np.isfinite(hi)
     if not np.any(mask):
         return
-    idx = np.flatnonzero(mask)
-    start, stop = int(idx[0]), int(idx[-1])
-    c = centers[start:stop + 1]
-    edges = _edges_from_centers(c, x_min=x_min if start == 0 else None,
-                                x_max=x_max if stop == centers.size - 1 else None)
-    y = central[start:stop + 1]
-    ylo = lo[start:stop + 1]
-    yhi = hi[start:stop + 1]
-    ax.step(edges, np.r_[y, y[-1]], where="post", color=color, lw=1.9,
-            ls=linestyle, label=label, zorder=zorder)
-    ax.fill_between(edges, np.r_[ylo, ylo[-1]], np.r_[yhi, yhi[-1]],
-                    step="post", facecolor="none", edgecolor=color,
-                    hatch=PRIM_HATCH, linewidth=0.0, alpha=0.90,
-                    zorder=zorder - 1)
+    for nseg, idx in enumerate(_contiguous_true_segments(mask)):
+        start, stop = int(idx[0]), int(idx[-1])
+        c = centers[start:stop + 1]
+        edges = _edges_from_centers(c, x_min=x_min if start == 0 else None,
+                                    x_max=x_max if stop == centers.size - 1 else None)
+        y = central[start:stop + 1]
+        ylo = lo[start:stop + 1]
+        yhi = hi[start:stop + 1]
+        ax.step(edges, np.r_[y, y[-1]], where="post", color=color, lw=1.9,
+                ls=linestyle, label=label if nseg == 0 else None, zorder=zorder)
+        if hatch:
+            ax.fill_between(edges, np.r_[ylo, ylo[-1]], np.r_[yhi, yhi[-1]],
+                            step="post", facecolor="none", edgecolor=fill_color or color,
+                            hatch=hatch, linewidth=0.0, alpha=0.85,
+                            zorder=zorder - 1)
+        else:
+            ax.fill_between(edges, np.r_[ylo, ylo[-1]], np.r_[yhi, yhi[-1]],
+                            step="post", facecolor=fill_color or color, edgecolor="none",
+                            alpha=fill_alpha, zorder=zorder - 1)
 
 
 def _step_old_reference(ax, centers: np.ndarray, values: np.ndarray, *,
@@ -1042,11 +1109,19 @@ def _step_cnm_reference(ax, df: pd.DataFrame, xcol: str, *,
         ax, x, c, lo, hi,
         color="#555555", label=label, linestyle="-.",
         x_min=x_min, x_max=x_max, zorder=2,
+        fill_alpha=0.22, fill_color="#9a9a9a",
     )
 
 
 def _state_label(state: str, layer_label: str) -> str:
     return rf"{STATE_TEX[state]} {layer_label}"
+
+
+def _cnm_legend_label(cfg: SystemConfig) -> str:
+    base = r"CNM: nPDF $\times$ ELoss $\times$ $p_T$ broad"
+    if cfg.key == "rhic_oo200":
+        return base + r" $\times$ Nucl Abs"
+    return base
 
 
 def _finite_band(df: pd.DataFrame, xcol: str) -> pd.DataFrame:
@@ -1066,10 +1141,11 @@ def _plot_step_panel(ax, df: pd.DataFrame, xcol: str, *,
                      x_min: float | None = None,
                      x_max: float | None = None,
                      variant_label: str = "TAMU-NP",
-                     show_cnm_reference: bool = True) -> None:
+                     show_cnm_reference: bool = True,
+                     cnm_label: str = "CNM") -> None:
     x = df[xcol].to_numpy(dtype=np.float64)
     if show_cnm_reference:
-        _step_cnm_reference(ax, df, xcol, x_min=x_min, x_max=x_max)
+        _step_cnm_reference(ax, df, xcol, x_min=x_min, x_max=x_max, label=cnm_label)
     for name in STATE_MAIN:
         color = STATE_COLORS[name]
         c = df[f"{name}_central"].to_numpy(dtype=np.float64)
@@ -1078,7 +1154,8 @@ def _plot_step_panel(ax, df: pd.DataFrame, xcol: str, *,
         _step_dashed_hatched(ax, x, c, lo, hi, color=color,
                              label=_state_label(name, f"{variant_label} Prim"),
                              linestyle=STATE_LS.get(name, "--"),
-                             x_min=x_min, x_max=x_max)
+                             x_min=x_min, x_max=x_max,
+                             fill_alpha=0.08)
         ccol = f"{name}_cnm_central"
         if ccol in df.columns:
             cc = df[ccol].to_numpy(dtype=np.float64)
@@ -1087,7 +1164,7 @@ def _plot_step_panel(ax, df: pd.DataFrame, xcol: str, *,
             _step_dashed_hatched(ax, x, cc, clo, chi, color=color,
                                  label=_state_label(name, f"CNM x {variant_label} Prim"),
                                  linestyle="-", x_min=x_min, x_max=x_max,
-                                 zorder=5)
+                                 zorder=5, fill_alpha=0.20)
         if old_ref is not None and old_x_col is not None and f"{name}_central" in old_ref:
             ox = old_ref[old_x_col].to_numpy(dtype=np.float64)
             oy = old_ref[f"{name}_central"].to_numpy(dtype=np.float64)
@@ -1154,14 +1231,15 @@ def plot_vs_y_grid(df: pd.DataFrame,
     data_axes = []
     for i, tag in enumerate(tags):
         ax = axes_flat[i]
-        sub = _finite_band(df[df["centrality"] == tag], "y_center")
+        sub = df[df["centrality"] == tag].copy().sort_values("y_center")
         if sub.empty:
             ax.set_visible(False)
             continue
         old = old_ref if tag == "MB" else None
         _plot_step_panel(ax, sub, "y_center", old_ref=old, old_x_col="y_center",
                          x_min=float(cfg.y_edges[0]), x_max=float(cfg.y_edges[-1]),
-                         variant_label=variant_label)
+                         variant_label=variant_label,
+                         cnm_label=_cnm_legend_label(cfg))
         _style_axis(ax, r"$y$")
         ax.set_xlim(float(cfg.y_edges[0]), float(cfg.y_edges[-1]))
         ax.text(0.05, 0.93, tag, transform=ax.transAxes, ha="left", va="top",
@@ -1207,13 +1285,14 @@ def plot_vs_pt_grid(df: pd.DataFrame,
         y_window_tex = rf"$\mathbf{{{y0:g}<y<{y1:g}}}$"
     for i, tag in enumerate(tags):
         ax = axes_flat[i]
-        sub = _finite_band(df[df["centrality"] == tag], "pT_center")
+        sub = df[df["centrality"] == tag].copy().sort_values("pT_center")
         if sub.empty:
             ax.set_visible(False)
             continue
         old = old_ref if tag == "MB" else None
         _plot_step_panel(ax, sub, "pT_center", old_ref=old, old_x_col="pT_center",
-                         x_min=0.0, x_max=cfg.pt_max, variant_label=variant_label)
+                         x_min=0.0, x_max=cfg.pt_max, variant_label=variant_label,
+                         cnm_label=_cnm_legend_label(cfg))
         _style_axis(ax, r"$p_T$ [GeV]")
         ax.set_xlim(0.0, cfg.pt_max)
         try:
@@ -1270,17 +1349,17 @@ def plot_vs_centrality(df: pd.DataFrame,
             cnm_hi = sub["cnm_hi"].to_numpy(dtype=np.float64)
             if np.any(np.isfinite(cnm_c) & np.isfinite(cnm_lo) & np.isfinite(cnm_hi)):
                 ax.step(edges, np.r_[cnm_c, cnm_c[-1]], where="post",
-                        color="#555555", lw=1.5, ls="-.", label="CNM")
+                        color="#555555", lw=1.5, ls="-.", label=_cnm_legend_label(cfg))
                 ax.fill_between(edges, np.r_[cnm_lo, cnm_lo[-1]], np.r_[cnm_hi, cnm_hi[-1]],
-                                step="post", facecolor="none", edgecolor="#555555",
-                                hatch=PRIM_HATCH, linewidth=0.0, alpha=0.55)
+                                step="post", facecolor="#9a9a9a", edgecolor="none",
+                                linewidth=0.0, alpha=0.22)
         m = np.isfinite(c) & np.isfinite(lo) & np.isfinite(hi)
         if np.any(m):
             ax.step(edges, np.r_[c, c[-1]], where="post", color=color,
                     lw=1.9, ls="--", label=f"{variant_label} Prim")
             ax.fill_between(edges, np.r_[lo, lo[-1]], np.r_[hi, hi[-1]],
-                            step="post", facecolor="none", edgecolor=color,
-                            hatch=PRIM_HATCH, linewidth=0.0, alpha=0.90)
+                            step="post", facecolor=color, edgecolor="none",
+                            linewidth=0.0, alpha=0.08)
         ccol = f"{name}_cnm_central"
         if ccol in sub.columns:
             cc = sub[ccol].to_numpy(dtype=np.float64)
@@ -1291,8 +1370,8 @@ def plot_vs_centrality(df: pd.DataFrame,
                 ax.step(edges, np.r_[cc, cc[-1]], where="post", color=color,
                         lw=2.0, ls="-", label=f"CNM x {variant_label} Prim")
                 ax.fill_between(edges, np.r_[clo, clo[-1]], np.r_[chi, chi[-1]],
-                                step="post", facecolor="none", edgecolor=color,
-                                hatch=PRIM_HATCH, linewidth=0.0, alpha=0.70)
+                                step="post", facecolor=color, edgecolor="none",
+                                linewidth=0.0, alpha=0.20)
         _style_axis(ax, "centrality [%]")
         ax.set_xlim(0.0, 100.0)
         ax.text(0.95, 0.93, STATE_TEX[name], transform=ax.transAxes,
@@ -1342,10 +1421,10 @@ def plot_vs_centrality_windows(by_window: Mapping[str, pd.DataFrame],
             cnm_hi = sub["cnm_hi"].to_numpy(dtype=np.float64)
             if np.any(np.isfinite(cnm_c) & np.isfinite(cnm_lo) & np.isfinite(cnm_hi)):
                 ax.step(edges, np.r_[cnm_c, cnm_c[-1]], where="post",
-                        color="#555555", lw=1.5, ls="-.", label="CNM")
+                        color="#555555", lw=1.5, ls="-.", label=_cnm_legend_label(cfg))
                 ax.fill_between(edges, np.r_[cnm_lo, cnm_lo[-1]], np.r_[cnm_hi, cnm_hi[-1]],
-                                step="post", facecolor="none", edgecolor="#555555",
-                                hatch=PRIM_HATCH, linewidth=0.0, alpha=0.55)
+                                step="post", facecolor="#9a9a9a", edgecolor="none",
+                                linewidth=0.0, alpha=0.22)
         for name in STATE_MAIN:
             c = sub[f"{name}_central"].to_numpy(dtype=np.float64)
             lo = sub[f"{name}_lo"].to_numpy(dtype=np.float64)
@@ -1355,8 +1434,8 @@ def plot_vs_centrality_windows(by_window: Mapping[str, pd.DataFrame],
                     lw=1.9, ls=STATE_LS.get(name, "--"),
                     label=_state_label(name, f"{variant_label} Prim"))
             ax.fill_between(edges, np.r_[lo, lo[-1]], np.r_[hi, hi[-1]],
-                            step="post", facecolor="none", edgecolor=color,
-                            hatch=PRIM_HATCH, linewidth=0.0, alpha=0.90)
+                            step="post", facecolor=color, edgecolor="none",
+                            linewidth=0.0, alpha=0.08)
             ccol = f"{name}_cnm_central"
             if ccol in sub.columns:
                 cc = sub[ccol].to_numpy(dtype=np.float64)
@@ -1366,8 +1445,8 @@ def plot_vs_centrality_windows(by_window: Mapping[str, pd.DataFrame],
                         lw=2.0, ls="-",
                         label=_state_label(name, f"CNM x {variant_label} Prim"))
                 ax.fill_between(edges, np.r_[clo, clo[-1]], np.r_[chi, chi[-1]],
-                                step="post", facecolor="none", edgecolor=color,
-                                hatch=PRIM_HATCH, linewidth=0.0, alpha=0.70)
+                                step="post", facecolor=color, edgecolor="none",
+                                linewidth=0.0, alpha=0.20)
             mb = df[df["centrality"] == "MB"]
             if not mb.empty:
                 row = mb.iloc[-1]
