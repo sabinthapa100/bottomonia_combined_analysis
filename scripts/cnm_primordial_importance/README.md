@@ -55,8 +55,9 @@ absorption factor, so its total is `nPDF x ELoss x pT broadening x absorption`.
 CNM is evaluated in the same centrality bins as primordial:
 `0-10`, `10-20`, `20-40`, `40-60`, `60-80`, `80-100`; MB is recomputed with the
 workflow MB windows (`0-100%` LHC, `0-80%` RHIC).
-For RHIC forward pT panels, the CNM curve is held fixed above `pT=8.5 GeV`,
-matching the charmonia CNM guard against the high-`x` nPDF edge instability.
+For RHIC forward pT panels and forward centrality projections, the CNM support
+is guarded at `pT=8.5 GeV`, matching the charmonia CNM guard against the
+high-`x` nPDF edge instability.
 
 The combined band is formed as a central-value product with relative
 uncertainties added in quadrature.

@@ -928,10 +928,13 @@ def _compute_cnm_tables(cfg: SystemConfig, y_edges: np.ndarray, pt_edges: np.nda
         pt_table["y_max"] = float(y_window[1])
         pt_tables[win_key] = pt_table
 
+        cent_pt_range = (0.0, float(cfg.pt_max))
+        if cfg.key == "rhic_oo200" and float(y_window[0]) * float(y_window[1]) > 0.0:
+            cent_pt_range = (0.0, 8.5)
         bands_cent = cnm.cnm_vs_centrality(
             y_window,
-            pt_range_avg=(0.0, float(cfg.pt_max)),
-            components=("cnm",),
+            pt_range_avg=cent_pt_range,
+            components=("npdf", "eloss_broad", "cnm"),
             include_mb=True,
         )
         cent_table = _table_from_cnm_centrality(win_key, cfg, bands_cent)
@@ -1122,6 +1125,42 @@ def _cnm_legend_label(cfg: SystemConfig) -> str:
     if cfg.key == "rhic_oo200":
         return base + r" $\times$ Nucl Abs"
     return base
+
+
+def _unique_handles_labels(handles, labels):
+    seen = set()
+    out_h, out_l = [], []
+    for h, lab in zip(handles, labels):
+        if not lab or lab in seen:
+            continue
+        seen.add(lab)
+        out_h.append(h)
+        out_l.append(lab)
+    return out_h, out_l
+
+
+def _split_legend_groups(handles, labels):
+    handles, labels = _unique_handles_labels(handles, labels)
+    left_h, left_l, right_h, right_l = [], [], [], []
+    for h, lab in zip(handles, labels):
+        if "CNM x" in lab:
+            right_h.append(h)
+            right_l.append(lab)
+        else:
+            left_h.append(h)
+            left_l.append(lab)
+    return (left_h, left_l), (right_h, right_l)
+
+
+def _draw_legend_axis(ax, handles, labels, *, ncol: int = 1) -> None:
+    ax.axis("off")
+    if handles:
+        ax.legend(
+            handles, labels,
+            loc="center", frameon=False, fontsize=9.2,
+            ncol=ncol, handlelength=2.6, columnspacing=1.0,
+            handletextpad=0.55,
+        )
 
 
 def _finite_band(df: pd.DataFrame, xcol: str) -> pd.DataFrame:
@@ -1331,9 +1370,14 @@ def plot_vs_centrality(df: pd.DataFrame,
                        y_window_tex: str | None = None,
                        variant_label: str = "TAMU-NP") -> None:
     plt = _configure_matplotlib()
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.3), sharey=True,
-                             dpi=160, layout="constrained")
+    fig = plt.figure(figsize=(13.5, 5.05), dpi=160, layout="constrained")
+    gs = fig.add_gridspec(2, 3, height_ratios=[1.0, 0.18])
+    axes = np.asarray([fig.add_subplot(gs[0, i]) for i in range(3)])
+    legend_left = fig.add_subplot(gs[1, 0:2])
+    legend_right = fig.add_subplot(gs[1, 2])
     for panel_index, (ax, name) in enumerate(zip(axes, STATE_MAIN)):
+        if panel_index > 0:
+            ax.sharey(axes[0])
         sub = df[df["centrality"] != "MB"].sort_values("cent_center")
         c = sub[f"{name}_central"].to_numpy(dtype=np.float64)
         lo = sub[f"{name}_lo"].to_numpy(dtype=np.float64)
@@ -1384,9 +1428,9 @@ def plot_vs_centrality(df: pd.DataFrame,
     for ax in axes:
         ax.set_ylim(*ylim)
     handles, labels = axes[0].get_legend_handles_labels()
-    if handles:
-        axes[0].legend(handles, labels, loc="lower right", frameon=False,
-                       fontsize=9.0, handlelength=2.8)
+    (h1, l1), (h2, l2) = _split_legend_groups(handles, labels)
+    _draw_legend_axis(legend_left, h1, l1, ncol=2)
+    _draw_legend_axis(legend_right, h2, l2, ncol=1)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(out.with_suffix(".png"), dpi=180, bbox_inches="tight")
@@ -1401,11 +1445,14 @@ def plot_vs_centrality_windows(by_window: Mapping[str, pd.DataFrame],
                                variant_label: str = "TAMU-NP") -> None:
     plt = _configure_matplotlib()
     n = len(cfg.y_windows)
-    fig, axes = plt.subplots(1, n, figsize=(4.6 * n, 4.4), sharey=True,
-                             dpi=160, layout="constrained")
-    axes = np.atleast_1d(axes).flatten()
+    fig = plt.figure(figsize=(4.8 * n, 5.15), dpi=160, layout="constrained")
+    gs = fig.add_gridspec(2, n, height_ratios=[1.0, 0.24])
+    axes = np.asarray([fig.add_subplot(gs[0, i]) for i in range(n)])
+    legend_axes = np.asarray([fig.add_subplot(gs[1, i]) for i in range(n)])
     data_axes = []
     for panel_index, (ax, (win_key, _, win_tex)) in enumerate(zip(axes, cfg.y_windows)):
+        if panel_index > 0:
+            ax.sharey(axes[0])
         df = by_window[win_key]
         sub = df[df["centrality"] != "MB"].sort_values("cent_center")
         if sub.empty:
@@ -1465,8 +1512,16 @@ def plot_vs_centrality_windows(by_window: Mapping[str, pd.DataFrame],
         for ax in data_axes:
             ax.set_ylim(*ylim)
         handles, labels = data_axes[0].get_legend_handles_labels()
-        data_axes[-1].legend(handles, labels, loc="lower right", frameon=False,
-                             fontsize=9.5, handlelength=2.8)
+        (h1, l1), (h2, l2) = _split_legend_groups(handles, labels)
+        _draw_legend_axis(legend_axes[0], h1, l1, ncol=1)
+        target = legend_axes[1] if len(legend_axes) > 1 else legend_axes[0]
+        _draw_legend_axis(target, h2, l2, ncol=1)
+    for ax in legend_axes:
+        if ax not in fig.axes:
+            continue
+        if ax.has_data():
+            continue
+        ax.axis("off")
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
     fig.savefig(out.with_suffix(".png"), dpi=180, bbox_inches="tight")
